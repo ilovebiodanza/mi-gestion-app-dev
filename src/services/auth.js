@@ -1,13 +1,5 @@
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail,
-  updatePassword,
-  onAuthStateChanged,
-} from "firebase/auth";
-import { auth } from "./firebase.js";
-import { initializeUserData } from "./firestore-init.js";
+// src/services/auth.js - Versión usando CDN
+import { firebaseService } from "./firebase-cdn.js";
 
 /**
  * Servicio de autenticación para Mi Gestión
@@ -23,7 +15,7 @@ class AuthService {
    * Inicializar listener de autenticación
    */
   initAuthListener() {
-    onAuthStateChanged(auth, async (user) => {
+    firebaseService.onAuthStateChanged(async (user) => {
       this.currentUser = user;
       this.notifyAuthListeners(user);
 
@@ -48,10 +40,40 @@ class AuthService {
 
       if (isNewUser) {
         console.log("🆕 Usuario nuevo, inicializando datos...");
-        await initializeUserData(user.uid);
+        await this.createUserProfile(user);
       }
     } catch (error) {
       console.error("Error al inicializar usuario:", error);
+    }
+  }
+
+  /**
+   * Crear perfil de usuario
+   */
+  async createUserProfile(user) {
+    try {
+      const userProfile = {
+        email: user.email,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        settings: {
+          theme: "auto",
+          language: "es",
+          autoLock: 30,
+        },
+      };
+
+      // Guardar en localStorage temporalmente
+      localStorage.setItem(
+        `user_profile_${user.uid}`,
+        JSON.stringify(userProfile)
+      );
+
+      console.log("✅ Perfil de usuario creado");
+      return userProfile;
+    } catch (error) {
+      console.error("Error al crear perfil:", error);
+      throw error;
     }
   }
 
@@ -60,14 +82,10 @@ class AuthService {
    */
   async register(email, password) {
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
+      const userCredential = await firebaseService.createUser(email, password);
 
       // Crear perfil de usuario
-      await this.createUserProfile(userCredential.user, email);
+      await this.createUserProfile(userCredential.user);
 
       return {
         success: true,
@@ -75,6 +93,7 @@ class AuthService {
         message: "Usuario registrado exitosamente",
       };
     } catch (error) {
+      console.error("Error en registro:", error);
       return {
         success: false,
         error: this.getErrorMessage(error.code),
@@ -88,16 +107,7 @@ class AuthService {
    */
   async login(email, password) {
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-
-      // Verificar que el usuario tiene datos inicializados
-      setTimeout(async () => {
-        await this.verifyUserData(userCredential.user.uid);
-      }, 1000);
+      const userCredential = await firebaseService.signIn(email, password);
 
       return {
         success: true,
@@ -105,6 +115,7 @@ class AuthService {
         message: "Sesión iniciada exitosamente",
       };
     } catch (error) {
+      console.error("Error en login:", error);
       return {
         success: false,
         error: this.getErrorMessage(error.code),
@@ -121,9 +132,10 @@ class AuthService {
       // Limpiar datos sensibles en localStorage/sessionStorage
       this.clearSensitiveData();
 
-      await signOut(auth);
+      await firebaseService.signOut();
       return { success: true, message: "Sesión cerrada exitosamente" };
     } catch (error) {
+      console.error("Error al cerrar sesión:", error);
       return {
         success: false,
         error: "Error al cerrar sesión",
@@ -137,12 +149,13 @@ class AuthService {
    */
   async resetPassword(email) {
     try {
-      await sendPasswordResetEmail(auth, email);
+      await firebaseService.resetPassword(email);
       return {
         success: true,
         message: "Correo de restablecimiento enviado",
       };
     } catch (error) {
+      console.error("Error en reset password:", error);
       return {
         success: false,
         error: this.getErrorMessage(error.code),
@@ -156,22 +169,24 @@ class AuthService {
    */
   async changePassword(newPassword) {
     try {
-      const user = auth.currentUser;
+      const user = this.currentUser;
       if (!user) {
         throw new Error("Usuario no autenticado");
       }
 
-      await updatePassword(user, newPassword);
+      await firebaseService.updatePassword(user, newPassword);
 
       // Aquí deberíamos disparar el proceso de re-encriptación
-      // de datos con la nueva contraseña
-      this.triggerReencryption(newPassword);
+      console.log(
+        "⚠️  Cambio de contraseña detectado - Re-encriptación requerida"
+      );
 
       return {
         success: true,
         message: "Contraseña actualizada exitosamente",
       };
     } catch (error) {
+      console.error("Error al cambiar contraseña:", error);
       return {
         success: false,
         error: this.getErrorMessage(error.code),
@@ -181,38 +196,34 @@ class AuthService {
   }
 
   /**
-   * Verificar datos del usuario
+   * Obtener mensaje de error amigable
    */
-  async verifyUserData(userId) {
-    // Implementar verificación de datos inicializados
-    console.log("Verificando datos del usuario:", userId);
-    return true;
-  }
-
-  /**
-   * Crear perfil de usuario
-   */
-  async createUserProfile(user, email) {
-    // Aquí se pueden agregar más datos al perfil del usuario
-    const profile = {
-      email: email,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      settings: {
-        theme: "auto",
-        language: "es",
-      },
+  getErrorMessage(errorCode) {
+    const errorMessages = {
+      "auth/email-already-in-use":
+        "Este correo ya está registrado. ¿Quieres iniciar sesión?",
+      "auth/invalid-email": "Correo electrónico no válido",
+      "auth/operation-not-allowed": "Operación no permitida",
+      "auth/weak-password":
+        "La contraseña es demasiado débil (mínimo 8 caracteres)",
+      "auth/user-disabled": "Esta cuenta ha sido deshabilitada",
+      "auth/user-not-found": "Usuario no encontrado. ¿Quieres registrarte?",
+      "auth/wrong-password": "Contraseña incorrecta. ¿Olvidaste tu contraseña?",
+      "auth/invalid-login-credentials":
+        "Email o contraseña incorrectos. Verifica tus credenciales.",
+      "auth/too-many-requests": "Demasiados intentos. Intenta más tarde",
+      "auth/network-request-failed": "Error de red. Verifica tu conexión",
+      "auth/popup-closed-by-user": "La ventana de autenticación fue cerrada",
+      "auth/cancelled-popup-request": "Solicitud de autenticación cancelada",
     };
 
-    // Guardar en localStorage temporalmente
-    localStorage.setItem(`user_profile_${user.uid}`, JSON.stringify(profile));
+    return errorMessages[errorCode] || `Error: ${errorCode}`;
   }
 
   /**
    * Limpiar datos sensibles
    */
   clearSensitiveData() {
-    // Eliminar claves de cifrado del almacenamiento local
     const keysToRemove = [
       "master_key",
       "encryption_keys",
@@ -224,36 +235,6 @@ class AuthService {
       localStorage.removeItem(key);
       sessionStorage.removeItem(key);
     });
-  }
-
-  /**
-   * Disparar re-encriptación (placeholder)
-   */
-  triggerReencryption(newPassword) {
-    console.log("⚠️  Cambio de contraseña detectado");
-    console.log(
-      "⚠️  Se requiere re-encriptación de datos con nueva contraseña"
-    );
-    // Esto se implementará en la fase de cifrado E2EE
-  }
-
-  /**
-   * Obtener mensaje de error amigable
-   */
-  getErrorMessage(errorCode) {
-    const errorMessages = {
-      "auth/email-already-in-use": "Este correo ya está registrado",
-      "auth/invalid-email": "Correo electrónico no válido",
-      "auth/operation-not-allowed": "Operación no permitida",
-      "auth/weak-password": "La contraseña es demasiado débil",
-      "auth/user-disabled": "Esta cuenta ha sido deshabilitada",
-      "auth/user-not-found": "Usuario no encontrado",
-      "auth/wrong-password": "Contraseña incorrecta",
-      "auth/too-many-requests": "Demasiados intentos. Intenta más tarde",
-      "auth/network-request-failed": "Error de red. Verifica tu conexión",
-    };
-
-    return errorMessages[errorCode] || "Error desconocido. Intenta nuevamente";
   }
 
   /**

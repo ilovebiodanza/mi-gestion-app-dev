@@ -51,8 +51,9 @@ function handleAuthStateChange(user, appElement) {
 function showAuthForms(appElement) {
   const authForms = new AuthForms((userData) => {
     // Cuando la autenticación es exitosa
-    console.log("Auth success:", userData);
-    // El listener de authService manejará la transición
+    console.log("✅ Auth success callback:", userData);
+    // El listener de authService ya manejará la transición
+    // No necesitamos hacer nada aquí
   });
 
   appElement.innerHTML = `

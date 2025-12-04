@@ -9,7 +9,7 @@
       content="Aplicación web para almacenamiento seguro de información personal con cifrado de extremo a extremo"
     />
 
-    <!-- Tailwind CSS (CDN para desarrollo) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Font Awesome Icons -->
@@ -17,6 +17,68 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
+
+    <!-- Firebase SDK v9 (modular) desde CDN -->
+    <script type="module">
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.3.0/firebase-app.js";
+      import {
+        getAuth,
+        createUserWithEmailAndPassword,
+        signInWithEmailAndPassword,
+        signOut,
+        sendPasswordResetEmail,
+        updatePassword,
+        onAuthStateChanged,
+      } from "https://www.gstatic.com/firebasejs/10.3.0/firebase-auth.js";
+      import {
+        getFirestore,
+        doc,
+        setDoc,
+        getDoc,
+      } from "https://www.gstatic.com/firebasejs/10.3.0/firebase-firestore.js";
+
+      // Your web app's Firebase configuration
+      // ¡REEMPLAZA ESTOS VALORES CON TUS CREDENCIALES!
+      const firebaseConfig = {
+        apiKey: "AIzaSyBJgDqHiHD8mncuRNlw8eA1ismr_fcvj2E",
+        authDomain: "mi-gestion-e2ee.firebaseapp.com",
+        projectId: "mi-gestion-e2ee",
+        storageBucket: "mi-gestion-e2ee.firebasestorage.app",
+        messagingSenderId: "97671435614",
+        appId: "1:97671435614:web:e0f35d92692ca1e63b2bcf",
+        measurementId: "G-GLYJSXBC8E",
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+
+      // Exportar funciones y objetos para usar en otros módulos
+      window.firebaseModules = {
+        // App
+        app,
+        auth,
+        db,
+
+        // Auth functions
+        createUserWithEmailAndPassword,
+        signInWithEmailAndPassword,
+        signOut,
+        sendPasswordResetEmail,
+        updatePassword,
+        onAuthStateChanged,
+
+        // Firestore functions
+        getFirestore,
+        doc,
+        setDoc,
+        getDoc,
+      };
+
+      console.log("✅ Firebase inicializado desde CDN");
+    </script>
 
     <!-- Favicon -->
     <link rel="icon" href="assets/favicon.ico" />

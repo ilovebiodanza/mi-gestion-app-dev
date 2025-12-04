@@ -1,3 +1,5 @@
+import { authService } from "../services/auth.js";
+
 /**
  * Componente para formularios de autenticación
  */
@@ -253,6 +255,9 @@ export class AuthForms {
     // Limpiar listeners anteriores
     this.removeEventListeners();
 
+    // Configurar validación en tiempo real
+    this.setupRealTimeValidation(container);
+
     // Agregar nuevos listeners según el formulario actual
     switch (this.currentForm) {
       case "login":
@@ -344,17 +349,31 @@ export class AuthForms {
     const email = document.getElementById("loginEmail").value;
     const password = document.getElementById("loginPassword").value;
 
-    // Aquí se integrará con authService
-    console.log("Login attempt:", { email, password });
+    // Validaciones básicas
+    if (!email || !password) {
+      this.showError("Por favor completa todos los campos");
+      return;
+    }
 
-    // Simulación temporal
     this.showLoading(true);
-    setTimeout(() => {
-      this.showLoading(false);
-      if (this.onAuthSuccess) {
-        this.onAuthSuccess({ email });
+
+    try {
+      const result = await authService.login(email, password);
+
+      if (result.success) {
+        console.log("✅ Login exitoso:", result.user.email);
+        // El listener de authService manejará la transición al dashboard
+      } else {
+        // MOSTRAR ERROR EN UI
+        this.showError(result.error || "Error en login");
+        this.showLoading(false);
       }
-    }, 1500);
+    } catch (error) {
+      console.error("Error en login:", error);
+      // MOSTRAR ERROR EN UI
+      this.showError("Error inesperado. Intenta nuevamente.");
+      this.showLoading(false);
+    }
   }
 
   /**
@@ -369,6 +388,12 @@ export class AuthForms {
       "registerConfirmPassword"
     ).value;
 
+    // Validaciones
+    if (!email || !password || !confirmPassword) {
+      this.showError("Por favor completa todos los campos");
+      return;
+    }
+
     if (password !== confirmPassword) {
       this.showError("Las contraseñas no coinciden");
       return;
@@ -379,16 +404,25 @@ export class AuthForms {
       return;
     }
 
-    console.log("Register attempt:", { email, password });
-
-    // Simulación temporal
     this.showLoading(true);
-    setTimeout(() => {
-      this.showLoading(false);
-      if (this.onAuthSuccess) {
-        this.onAuthSuccess({ email });
+
+    try {
+      const result = await authService.register(email, password);
+
+      if (result.success) {
+        console.log("✅ Registro exitoso:", result.user.email);
+        // El listener de authService manejará la transición
+      } else {
+        // MOSTRAR ERROR EN UI
+        this.showError(result.error || "Error en registro");
+        this.showLoading(false);
       }
-    }, 1500);
+    } catch (error) {
+      console.error("Error en registro:", error);
+      // MOSTRAR ERROR EN UI
+      this.showError("Error inesperado. Intenta nuevamente.");
+      this.showLoading(false);
+    }
   }
 
   /**
@@ -399,23 +433,80 @@ export class AuthForms {
 
     const email = document.getElementById("resetEmail").value;
 
-    console.log("Password reset requested for:", email);
+    if (!email) {
+      this.showError("Por favor ingresa tu correo electrónico");
+      return;
+    }
 
-    // Simulación temporal
+    // Validar formato de email simple
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      this.showError("Por favor ingresa un correo electrónico válido");
+      return;
+    }
+
     this.showLoading(true);
-    setTimeout(() => {
+
+    try {
+      const result = await authService.resetPassword(email);
+
+      if (result.success) {
+        this.showMessage(result.message, "success");
+        // Volver al formulario de login después de 3 segundos
+        setTimeout(() => {
+          this.currentForm = "login";
+          this.updateView(document.getElementById("authContainer"));
+        }, 3000);
+      } else {
+        // MOSTRAR ERROR EN UI
+        this.showError(
+          result.error || "Error al enviar correo de recuperación"
+        );
+        this.showLoading(false);
+      }
+    } catch (error) {
+      console.error("Error en recuperación:", error);
+      // MOSTRAR ERROR EN UI
+      this.showError("Error inesperado. Intenta nuevamente.");
       this.showLoading(false);
-      this.showMessage(
-        "Correo enviado. Revisa tu bandeja de entrada.",
-        "success"
-      );
-      setTimeout(() => {
-        this.currentForm = "login";
-        this.updateView(document.getElementById("authContainer"));
-      }, 2000);
-    }, 1500);
+    }
   }
 
+  /**
+   * Manejar recuperación de contraseña
+   */
+  async handleForgotPassword(event) {
+    event.preventDefault();
+
+    const email = document.getElementById("resetEmail").value;
+
+    if (!email) {
+      this.showError("Por favor ingresa tu correo electrónico");
+      return;
+    }
+
+    this.showLoading(true);
+
+    try {
+      const result = await authService.resetPassword(email);
+
+      if (result.success) {
+        this.showMessage(result.message, "success");
+        // Volver al formulario de login después de 2 segundos
+        setTimeout(() => {
+          this.currentForm = "login";
+          this.updateView(document.getElementById("authContainer"));
+        }, 2000);
+      } else {
+        this.showError(result.error);
+        this.showLoading(false);
+      }
+    } catch (error) {
+      console.error("Error en recuperación:", error);
+      this.showError("Error inesperado. Intenta nuevamente.");
+      this.showLoading(false);
+    }
+  }
   /**
    * Actualizar vista
    */
@@ -431,14 +522,39 @@ export class AuthForms {
    */
   showLoading(show) {
     const buttons = document.querySelectorAll('button[type="submit"]');
+    const allButtons = document.querySelectorAll("#authContainer button");
+
     buttons.forEach((button) => {
       if (show) {
-        button.innerHTML =
-          '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
+        // Guardar texto original si no está guardado
+        if (!button.dataset.originalText) {
+          button.dataset.originalText = button.innerHTML;
+        }
+
+        // Mostrar spinner y texto de carga
+        const spinner = '<div class="spinner inline-block mr-2"></div>';
+        button.innerHTML = spinner + " Procesando...";
         button.disabled = true;
+        button.classList.add("opacity-50", "cursor-not-allowed");
       } else {
-        // Restaurar texto original según el formulario
-        this.restoreButtonText(button);
+        // Restaurar texto original
+        if (button.dataset.originalText) {
+          button.innerHTML = button.dataset.originalText;
+          delete button.dataset.originalText;
+        }
+        button.disabled = false;
+        button.classList.remove("opacity-50", "cursor-not-allowed");
+      }
+    });
+
+    // También deshabilitar inputs durante loading
+    const inputs = document.querySelectorAll("#authContainer input");
+    inputs.forEach((input) => {
+      input.disabled = show;
+      if (show) {
+        input.classList.add("opacity-50", "cursor-not-allowed");
+      } else {
+        input.classList.remove("opacity-50", "cursor-not-allowed");
       }
     });
   }
@@ -461,19 +577,116 @@ export class AuthForms {
   }
 
   /**
-   * Mostrar error
+   * Mostrar error en la interfaz
    */
-  showError(message) {
-    // Implementar toast de error
-    alert(`Error: ${message}`);
+  showError(message, duration = 5000) {
+    // Limpiar mensajes anteriores
+    this.clearMessages();
+
+    // Crear elemento de error
+    const errorDiv = document.createElement("div");
+    errorDiv.className = "error-message animate-fade-in";
+    errorDiv.innerHTML = `
+    <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-r-lg">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <i class="fas fa-exclamation-circle text-red-400 text-lg"></i>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm font-medium text-red-800">${message}</p>
+          <p class="text-xs text-red-600 mt-1">Por favor, verifica la información e intenta nuevamente.</p>
+        </div>
+        <div class="ml-auto pl-3">
+          <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                  class="text-red-500 hover:text-red-700 focus:outline-none">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+    // Agregar al DOM
+    const container = document.querySelector("#authContainer");
+    if (container) {
+      // Insertar al principio del contenedor
+      container.insertBefore(errorDiv, container.firstChild);
+
+      // Auto-eliminar después del tiempo especificado
+      if (duration > 0) {
+        setTimeout(() => {
+          if (errorDiv.parentNode) {
+            errorDiv.remove();
+          }
+        }, duration);
+      }
+
+      // Hacer scroll suave hacia el error
+      errorDiv.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
   }
 
   /**
-   * Mostrar mensaje
+   * Mostrar mensaje de éxito
    */
-  showMessage(message, type = "info") {
-    // Implementar toast
-    alert(`${type.toUpperCase()}: ${message}`);
+  showMessage(message, type = "success", duration = 5000) {
+    this.clearMessages();
+
+    const icon = type === "success" ? "fa-check-circle" : "fa-info-circle";
+    const colorClass = type === "success" ? "green" : "blue";
+    const borderColor =
+      type === "success" ? "border-green-500" : "border-blue-500";
+    const textColor = type === "success" ? "text-green-800" : "text-blue-800";
+    const iconColor = type === "success" ? "text-green-400" : "text-blue-400";
+
+    const messageDiv = document.createElement("div");
+    messageDiv.className = "success-message animate-fade-in";
+    messageDiv.innerHTML = `
+    <div class="bg-${colorClass}-50 border-l-4 ${borderColor} p-4 mb-4 rounded-r-lg">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <i class="fas ${icon} ${iconColor} text-lg"></i>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm font-medium ${textColor}">${message}</p>
+        </div>
+        <div class="ml-auto pl-3">
+          <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                  class="text-${colorClass}-500 hover:text-${colorClass}-700 focus:outline-none">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+    const container = document.querySelector("#authContainer");
+    if (container) {
+      container.insertBefore(messageDiv, container.firstChild);
+
+      if (duration > 0) {
+        setTimeout(() => {
+          if (messageDiv.parentNode) {
+            messageDiv.remove();
+          }
+        }, duration);
+      }
+    }
+  }
+
+  /**
+   * Limpiar todos los mensajes
+   */
+  clearMessages() {
+    const messages = document.querySelectorAll(
+      ".error-message, .success-message"
+    );
+    messages.forEach((msg) => {
+      // Solo remover si tiene la clase de animación
+      if (msg.classList.contains("animate-fade-in")) {
+        msg.remove();
+      }
+    });
   }
 
   /**
@@ -481,5 +694,98 @@ export class AuthForms {
    */
   removeEventListeners() {
     // Se pueden implementar tracking de listeners si es necesario
+  }
+
+  /**
+   * Configurar validación en tiempo real
+   */
+  setupRealTimeValidation(container) {
+    const emailInputs = container.querySelectorAll('input[type="email"]');
+    const passwordInputs = container.querySelectorAll('input[type="password"]');
+
+    // Validar email en tiempo real
+    emailInputs.forEach((input) => {
+      input.addEventListener("blur", () => {
+        this.validateEmail(input);
+      });
+
+      input.addEventListener("input", () => {
+        this.clearInputError(input);
+      });
+    });
+
+    // Validar password en tiempo real
+    passwordInputs.forEach((input) => {
+      input.addEventListener("blur", () => {
+        this.validatePassword(input);
+      });
+
+      input.addEventListener("input", () => {
+        this.clearInputError(input);
+      });
+    });
+  }
+
+  /**
+   * Validar email
+   */
+  validateEmail(input) {
+    const email = input.value.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (email && !emailRegex.test(email)) {
+      this.showInputError(input, "Correo electrónico no válido");
+      return false;
+    }
+
+    this.clearInputError(input);
+    return true;
+  }
+
+  /**
+   * Validar password
+   */
+  validatePassword(input) {
+    const password = input.value;
+
+    if (password && password.length < 8) {
+      this.showInputError(input, "Mínimo 8 caracteres");
+      return false;
+    }
+
+    this.clearInputError(input);
+    return true;
+  }
+
+  /**
+   * Mostrar error en input específico
+   */
+  showInputError(input, message) {
+    // Limpiar error anterior
+    this.clearInputError(input);
+
+    // Agregar clase de error
+    input.classList.add("input-error");
+
+    // Crear elemento de error
+    const errorDiv = document.createElement("div");
+    errorDiv.className = "text-red-600 text-xs mt-1 ml-1";
+    errorDiv.id = `error-${input.id}`;
+    errorDiv.textContent = message;
+
+    // Insertar después del input
+    input.parentNode.appendChild(errorDiv);
+  }
+
+  /**
+   * Limpiar error de input
+   */
+  clearInputError(input) {
+    input.classList.remove("input-error");
+
+    const errorDiv = input.parentNode.querySelector(`#error-${input.id}`);
+    if (errorDiv) {
+      errorDiv.remove();
+    }
   }
 }
