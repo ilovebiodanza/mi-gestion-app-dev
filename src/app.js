@@ -1,6 +1,9 @@
 // src/app.js - Archivo principal de la aplicación
 import { authService } from "./services/auth.js";
 import { AuthForms } from "./components/AuthForms.js";
+import { PasswordPrompt } from "./components/PasswordPrompt.js";
+import { encryptionService } from "./services/encryption/index.js";
+import { EncryptionTest } from "./components/EncryptionTest.js";
 
 console.log("Mi Gestión - Aplicación inicializada");
 
@@ -23,26 +26,63 @@ async function initializeApplication() {
   }
 
   // Suscribirse a cambios de autenticación
-  authService.subscribe((user) => {
-    handleAuthStateChange(user, appElement);
+  authService.subscribe(async (user) => {
+    await handleAuthStateChange(user, appElement);
   });
 
   // Mostrar estado inicial
   const user = authService.getCurrentUser();
-  handleAuthStateChange(user, appElement);
+  await handleAuthStateChange(user, appElement);
 }
 
 /**
  * Manejar cambios en el estado de autenticación
  */
-function handleAuthStateChange(user, appElement) {
+async function handleAuthStateChange(user, appElement) {
   if (user) {
     // Usuario autenticado - mostrar dashboard
     showDashboard(user, appElement);
+
+    // Verificar si el cifrado está inicializado
+    await checkAndInitializeEncryption(user);
   } else {
     // Usuario no autenticado - mostrar formularios de auth
     showAuthForms(appElement);
   }
+}
+
+/**
+ * Verificar e inicializar cifrado si es necesario
+ */
+async function checkAndInitializeEncryption(user) {
+  // Esperar un momento para que la UI se cargue
+  setTimeout(async () => {
+    // Verificar si el cifrado ya está inicializado
+    const isEncryptionInitialized = encryptionService.isReady();
+
+    if (!isEncryptionInitialized) {
+      console.log("🔐 Cifrado no inicializado, mostrando prompt...");
+
+      // Mostrar prompt para solicitar contraseña
+      const passwordPrompt = new PasswordPrompt(async (password) => {
+        try {
+          // Inicializar cifrado con la contraseña
+          await authService.initializeEncryption(password);
+          return true;
+        } catch (error) {
+          console.error("Error al inicializar cifrado:", error);
+          return false;
+        }
+      }, user.email);
+
+      // Mostrar después de un pequeño delay para mejor UX
+      setTimeout(() => {
+        passwordPrompt.show();
+      }, 500);
+    } else {
+      console.log("✅ Cifrado ya está inicializado");
+    }
+  }, 1000);
 }
 
 /**
@@ -221,6 +261,13 @@ function showDashboard(user, appElement) {
                 </div>
                 <i class="fas fa-chevron-right text-gray-400"></i>
               </button>
+              <button id="initializeEncryptionBtn" class="w-full flex items-center justify-between p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition">
+                <div class="flex items-center">
+                  <i class="fas fa-shield-alt text-purple-600 mr-3"></i>
+                  <span class="font-medium">Activar Cifrado E2EE</span>
+                </div>
+                <i class="fas fa-chevron-right text-gray-400"></i>
+              </button>
             </div>
           </div>
           
@@ -250,6 +297,34 @@ function showDashboard(user, appElement) {
       </main>
     </div>
   `;
+
+  // Solo mostrar para desarrollo/testing
+  if (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+  ) {
+    appElement.innerHTML += `
+      <div class="mt-12 max-w-7xl mx-auto px-4">
+        <div class="border-t border-gray-200 pt-8">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-flask mr-2"></i>
+            Pruebas de Desarrollo - Cifrado E2EE
+          </h3>
+          <div id="encryptionTestContainer"></div>
+        </div>
+      </div>
+    `;
+
+    // Inicializar prueba de cifrado
+    setTimeout(() => {
+      const encryptionTest = new EncryptionTest();
+      const container = document.getElementById("encryptionTestContainer");
+      if (container) {
+        container.innerHTML = encryptionTest.render();
+        encryptionTest.setupEventListeners();
+      }
+    }, 100);
+  }
 
   // Configurar event listeners del dashboard
   setupDashboardListeners();
@@ -287,6 +362,15 @@ function setupDashboardListeners() {
       } catch (error) {
         console.error("Error al cerrar sesión:", error);
         alert("Error al cerrar sesión. Intenta nuevamente.");
+      }
+    });
+  }
+  const initEncryptionBtn = document.getElementById("initializeEncryptionBtn");
+  if (initEncryptionBtn) {
+    initEncryptionBtn.addEventListener("click", async () => {
+      const user = authService.getCurrentUser();
+      if (user) {
+        await checkAndInitializeEncryption(user);
       }
     });
   }

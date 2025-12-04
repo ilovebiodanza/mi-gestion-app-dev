@@ -1,5 +1,6 @@
 // src/services/auth.js - Versión usando CDN
 import { firebaseService } from "./firebase-cdn.js";
+import { encryptionService } from "./encryption/index.js";
 
 /**
  * Servicio de autenticación para Mi Gestión
@@ -84,6 +85,17 @@ class AuthService {
     try {
       const userCredential = await firebaseService.createUser(email, password);
 
+      // INICIALIZAR CIFRADO después de registro exitoso
+      try {
+        await this.initializeEncryption(password);
+      } catch (encryptionError) {
+        console.warn(
+          "⚠️  Cifrado no pudo inicializarse:",
+          encryptionError.message
+        );
+        // Continuamos sin cifrado
+      }
+
       // Crear perfil de usuario
       await this.createUserProfile(userCredential.user);
 
@@ -109,6 +121,17 @@ class AuthService {
     try {
       const userCredential = await firebaseService.signIn(email, password);
 
+      // INICIALIZAR CIFRADO después de login exitoso
+      try {
+        await this.initializeEncryption(password);
+      } catch (encryptionError) {
+        console.warn(
+          "⚠️  Cifrado no pudo inicializarse:",
+          encryptionError.message
+        );
+        // Continuamos sin cifrado, pero mostramos advertencia
+      }
+
       return {
         success: true,
         user: userCredential.user,
@@ -127,12 +150,18 @@ class AuthService {
   /**
    * Cerrar sesión
    */
+  // Modificar el método logout para limpiar cifrado:
   async logout() {
     try {
-      // Limpiar datos sensibles en localStorage/sessionStorage
+      // LIMPIAR CIFRADO primero
+      this.clearEncryption();
+
+      // Limpiar datos sensibles
       this.clearSensitiveData();
 
+      // Cerrar sesión en Firebase
       await firebaseService.signOut();
+
       return { success: true, message: "Sesión cerrada exitosamente" };
     } catch (error) {
       console.error("Error al cerrar sesión:", error);
@@ -286,6 +315,54 @@ class AuthService {
       return await this.currentUser.getIdToken();
     }
     return null;
+  }
+
+  /**
+   * Inicializar cifrado después de login/registro exitoso
+   */
+  async initializeEncryption(password) {
+    try {
+      console.log("🔐 Inicializando cifrado E2EE...");
+      await encryptionService.initialize(password);
+      console.log("✅ Cifrado E2EE inicializado");
+
+      // Guardar estado en localStorage para persistencia
+      localStorage.setItem("encryption_initialized", "true");
+      localStorage.setItem("encryption_timestamp", new Date().toISOString());
+
+      return true;
+    } catch (error) {
+      console.error("❌ Error al inicializar cifrado:", error);
+
+      // Mostrar error amigable
+      if (error.toString().includes("QuotaExceededError")) {
+        throw new Error(
+          "Memoria insuficiente para cifrado. Cierra otras pestañas."
+        );
+      }
+
+      throw new Error("Error al configurar el cifrado seguro");
+    }
+  }
+
+  /**
+   * Limpiar cifrado al cerrar sesión
+   */
+  clearEncryption() {
+    encryptionService.clearKeys();
+
+    // Limpiar estado de localStorage
+    localStorage.removeItem("encryption_initialized");
+    localStorage.removeItem("encryption_timestamp");
+
+    console.log("🗑️  Cifrado limpiado");
+  }
+
+  /**
+   * Verificar si el cifrado está inicializado
+   */
+  isEncryptionInitialized() {
+    return encryptionService.isReady();
   }
 }
 
