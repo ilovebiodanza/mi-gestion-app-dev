@@ -10,4 +10,10 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+// Configuración de Firestore
+const firestoreSettings = {
+  // Usar caché persistente para mejor experiencia offline
+  // cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
+};
+
 export { db, auth, app };
