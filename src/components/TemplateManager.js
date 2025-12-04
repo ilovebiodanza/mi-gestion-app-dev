@@ -9,6 +9,7 @@ export class TemplateManager {
     this.onTemplateSelect = onTemplateSelect;
     this.currentView = "list"; // 'list', 'create', 'edit', 'preview'
     this.editingTemplate = null;
+    this.tempFormData = null; // <-- NUEVO: Guardar datos del formulario temporalmente
   }
 
   /**
@@ -107,6 +108,14 @@ export class TemplateManager {
             <span id="customTemplatesCount" class="bg-gray-200 text-gray-700 text-xs font-medium px-3 py-1 rounded-full">
               0 plantillas
             </span>
+          </div>
+          <div class="flex space-x-2">
+            <span id="customTemplatesCount" class="bg-gray-200 text-gray-700 text-xs font-medium px-3 py-1 rounded-full">
+              0 plantillas
+            </span>
+            <button id="debugTemplates" class="text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 px-2 py-1 rounded" title="Debug">
+              <i class="fas fa-bug"></i>
+            </button>
           </div>
           <div id="customTemplatesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- Se llenará dinámicamente -->
@@ -589,6 +598,13 @@ export class TemplateManager {
       const templates = await templateService.getUserTemplates();
       const categories = await templateService.getCategories();
 
+      console.log("📋 Plantillas recibidas:", templates.length);
+      console.log("📊 Desglose:", {
+        sistema: templates.filter((t) => t.settings?.isSystemTemplate).length,
+        personales: templates.filter((t) => !t.settings?.isSystemTemplate)
+          .length,
+      });
+
       // Renderizar lista
       content.innerHTML = this.renderTemplateList(templates, categories);
 
@@ -597,7 +613,7 @@ export class TemplateManager {
 
       // Actualizar contador de plantillas personalizadas
       const customTemplates = templates.filter(
-        (t) => !t.settings.isSystemTemplate
+        (t) => !t.settings?.isSystemTemplate
       );
       const countElement = document.getElementById("customTemplatesCount");
       const listElement = document.getElementById("customTemplatesList");
@@ -611,11 +627,16 @@ export class TemplateManager {
 
       if (listElement && noTemplatesElement) {
         if (customTemplates.length > 0) {
+          console.log(
+            "🎨 Renderizando plantillas personales:",
+            customTemplates.map((t) => t.name)
+          );
           listElement.innerHTML = customTemplates
             .map((t) => this.renderTemplateCard(t))
             .join("");
           noTemplatesElement.classList.add("hidden");
         } else {
+          console.log("📭 No hay plantillas personales");
           listElement.innerHTML = "";
           noTemplatesElement.classList.remove("hidden");
         }
@@ -681,6 +702,50 @@ export class TemplateManager {
         this.deleteTemplate(templateId);
       });
     });
+
+    // Depurar plantillas
+    document.getElementById("debugTemplates")?.addEventListener("click", () => {
+      this.debugTemplates();
+    });
+  }
+
+  /**
+   * Función de debug para plantillas
+   */
+  async debugTemplates() {
+    try {
+      const templates = await templateService.getUserTemplates();
+      const systemCount = templates.filter(
+        (t) => t.settings?.isSystemTemplate
+      ).length;
+      const personalCount = templates.filter(
+        (t) => !t.settings?.isSystemTemplate
+      ).length;
+
+      console.group("🔍 DEBUG - Plantillas");
+      console.log("📊 Totales:", templates.length);
+      console.log("🏢 Sistema:", systemCount);
+      console.log("👤 Personales:", personalCount);
+      console.log("📋 Lista completa:", templates);
+
+      // Verificar localStorage
+      if (templateService.userId) {
+        const storageKey = `user_templates_${templateService.userId}`;
+        const stored = localStorage.getItem(storageKey);
+        console.log(
+          "💾 En localStorage:",
+          stored ? JSON.parse(stored) : "Nada"
+        );
+      }
+
+      console.groupEnd();
+
+      alert(
+        `Plantillas: ${templates.length} totales\nSistema: ${systemCount}\nPersonales: ${personalCount}\nRevisa la consola para más detalles.`
+      );
+    } catch (error) {
+      console.error("Error en debug:", error);
+    }
   }
 
   /**
@@ -695,10 +760,15 @@ export class TemplateManager {
         // Cargar plantilla existente para editar
         const template = await templateService.getTemplateById(templateId);
         this.editingTemplate = template;
+        this.tempFormData = null; // Limpiar datos temporales
         content.innerHTML = this.renderTemplateForm(template);
+      } else if (this.tempFormData) {
+        // Recuperar datos temporales del preview
+        content.innerHTML = this.renderTemplateForm(this.tempFormData);
       } else {
         // Nueva plantilla
         this.editingTemplate = null;
+        this.tempFormData = null;
         content.innerHTML = this.renderTemplateForm();
       }
 
@@ -873,7 +943,7 @@ export class TemplateManager {
       // Recopilar datos del formulario
       const templateData = this.collectFormData();
 
-      // Validar datos básicos primero (sin id)
+      // Validar datos básicos primero
       try {
         templateService.validateTemplateData(templateData);
       } catch (validationError) {
@@ -901,6 +971,10 @@ export class TemplateManager {
         savedTemplate = await templateService.createTemplate(templateData);
       }
 
+      // Limpiar datos temporales después de guardar
+      this.tempFormData = null;
+      this.editingTemplate = null;
+
       // Mostrar éxito
       this.showSuccess(
         this.editingTemplate
@@ -922,7 +996,7 @@ export class TemplateManager {
         errorMessage = "Error en los campos: " + error.message;
       } else if (error.message.includes("JavaScript válido")) {
         errorMessage =
-          "Nombre de campo inválido. Debe comenzar con letra y no contener espacios.";
+          "Error en el nombre del campo. Debe comenzar con letra y no contener espacios.";
       }
 
       this.showError(errorMessage);
@@ -1029,71 +1103,93 @@ export class TemplateManager {
    * Recopilar datos del formulario
    */
   collectFormData() {
-    const name = document.getElementById("templateName")?.value || "";
-    const description =
-      document.getElementById("templateDescription")?.value || "";
-    const icon = document.getElementById("templateIcon")?.value || "📋";
-    const color = document.getElementById("templateColor")?.value || "#3B82F6";
-    const allowDuplicates =
-      document.getElementById("allowDuplicates")?.checked || false;
-    const maxEntries =
-      parseInt(document.getElementById("maxEntries")?.value) || 0;
-    const category =
-      document.getElementById("templateCategory")?.value || "custom";
+    try {
+      const name = document.getElementById("templateName")?.value || "";
+      const description =
+        document.getElementById("templateDescription")?.value || "";
+      const icon = document.getElementById("templateIcon")?.value || "📋";
+      const color =
+        document.getElementById("templateColor")?.value || "#3B82F6";
+      const allowDuplicates =
+        document.getElementById("allowDuplicates")?.checked || false;
+      const maxEntries =
+        parseInt(document.getElementById("maxEntries")?.value) || 0;
+      const category =
+        document.getElementById("templateCategory")?.value || "custom";
 
-    // Recopilar campos
-    const fields = [];
-    document.querySelectorAll(".field-item").forEach((fieldItem, index) => {
-      const label = fieldItem.querySelector(".field-label")?.value || "";
-      const type = fieldItem.querySelector(".field-type")?.value || "string";
-
-      // Validar campo básico
-      if (!label.trim()) {
-        throw new Error(`Campo ${index + 1}: El nombre del campo es requerido`);
+      // Validar nombre de plantilla
+      if (!name.trim()) {
+        throw new Error("El nombre de la plantilla es requerido");
       }
 
-      if (!type) {
-        throw new Error(`Campo ${index + 1}: El tipo de dato es requerido`);
+      // Recopilar campos
+      const fields = [];
+      const fieldElements = document.querySelectorAll(".field-item");
+
+      if (fieldElements.length === 0) {
+        throw new Error("La plantilla debe tener al menos un campo");
       }
 
-      // Generar ID automático basado en la etiqueta
-      const fieldId = this.generateFieldIdFromLabel(label, index);
+      fieldElements.forEach((fieldItem, index) => {
+        const label = fieldItem.querySelector(".field-label")?.value || "";
+        const type = fieldItem.querySelector(".field-type")?.value || "string";
 
-      const field = {
-        id: fieldId,
-        label: label.trim(),
-        type: type,
-        order:
-          parseInt(fieldItem.querySelector(".field-order")?.value) || index + 1,
-        placeholder: fieldItem.querySelector(".field-placeholder")?.value || "",
-        required: fieldItem.querySelector(".field-required")?.checked || false,
-        sensitive:
-          fieldItem.querySelector(".field-sensitive")?.checked || false,
-        encryptionLevel: fieldItem.querySelector(".field-sensitive")?.checked
-          ? fieldItem.querySelector(".field-encryption-level")?.value ||
-            "medium"
-          : undefined,
+        // Validar campo básico
+        if (!label.trim()) {
+          throw new Error(
+            `Campo ${index + 1}: El nombre del campo es requerido`
+          );
+        }
+
+        if (!type) {
+          throw new Error(`Campo ${index + 1}: El tipo de dato es requerido`);
+        }
+
+        // Generar ID automático basado en la etiqueta
+        const fieldId = this.generateFieldIdFromLabel(label, index);
+
+        const field = {
+          id: fieldId,
+          label: label.trim(),
+          type: type,
+          order:
+            parseInt(fieldItem.querySelector(".field-order")?.value) ||
+            index + 1,
+          placeholder:
+            fieldItem.querySelector(".field-placeholder")?.value || "",
+          required:
+            fieldItem.querySelector(".field-required")?.checked || false,
+          sensitive:
+            fieldItem.querySelector(".field-sensitive")?.checked || false,
+          encryptionLevel: fieldItem.querySelector(".field-sensitive")?.checked
+            ? fieldItem.querySelector(".field-encryption-level")?.value ||
+              "medium"
+            : undefined,
+        };
+
+        fields.push(field);
+      });
+
+      // Ordenar campos por orden
+      fields.sort((a, b) => a.order - b.order);
+
+      return {
+        name: name.trim(),
+        description: description.trim(),
+        icon,
+        color,
+        fields,
+        settings: {
+          allowDuplicates,
+          maxEntries,
+          category,
+          isSystemTemplate: false,
+        },
       };
-
-      fields.push(field);
-    });
-
-    // Ordenar campos por orden
-    fields.sort((a, b) => a.order - b.order);
-
-    return {
-      name,
-      description,
-      icon,
-      color,
-      fields,
-      settings: {
-        allowDuplicates,
-        maxEntries,
-        category,
-        isSystemTemplate: false,
-      },
-    };
+    } catch (error) {
+      console.error("Error al recopilar datos:", error);
+      throw error;
+    }
   }
 
   /**
@@ -1122,8 +1218,9 @@ export class TemplateManager {
    */
   async previewTemplate() {
     try {
-      const templateData = this.collectFormData();
-      this.showTemplatePreviewData(templateData);
+      // Guardar datos del formulario temporalmente antes de ir al preview
+      this.tempFormData = this.collectFormData();
+      this.showTemplatePreviewData(this.tempFormData);
     } catch (error) {
       this.showError("Error en vista previa: " + error.message);
     }
@@ -1229,7 +1326,14 @@ export class TemplateManager {
 
     // Configurar listeners
     document.getElementById("backToForm")?.addEventListener("click", () => {
-      this.showTemplateForm(this.editingTemplate);
+      // Si hay datos temporales, volver al formulario con ellos
+      if (this.tempFormData) {
+        this.showTemplateForm(); // Esto ahora usará tempFormData automáticamente
+      } else if (this.editingTemplate) {
+        this.showTemplateForm(this.editingTemplate.id);
+      } else {
+        this.showTemplateForm();
+      }
     });
 
     document

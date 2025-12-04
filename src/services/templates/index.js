@@ -13,14 +13,84 @@ class TemplateService {
     this.userId = null;
     this.appId = "mi-gestion-v1";
     this.systemTemplates = this.getSystemTemplates();
+    this.userTemplates = []; // Almacenamiento en memoria
+    this.isInitialized = false;
   }
 
   /**
    * Inicializar servicio con usuario
    */
-  initialize(userId) {
+  async initialize(userId) {
     this.userId = userId;
+    this.isInitialized = true;
+
+    // Cargar plantillas del usuario desde localStorage (temporal)
+    await this.loadUserTemplates();
+
     console.log("📋 Servicio de plantillas inicializado para:", userId);
+    console.log(
+      `📊 Plantillas cargadas: ${this.userTemplates.length} personalizadas + ${this.systemTemplates.length} del sistema`
+    );
+  }
+
+  /**
+   * Cargar plantillas del usuario desde localStorage (temporal)
+   */
+  async loadUserTemplates() {
+    try {
+      if (!this.userId) return;
+
+      const storageKey = `user_templates_${this.userId}`;
+      const storedTemplates = localStorage.getItem(storageKey);
+
+      if (storedTemplates) {
+        this.userTemplates = JSON.parse(storedTemplates);
+        console.log(
+          `📂 ${this.userTemplates.length} plantillas cargadas de localStorage`
+        );
+      } else {
+        this.userTemplates = [];
+        console.log("📂 No hay plantillas guardadas anteriormente");
+      }
+    } catch (error) {
+      console.error("❌ Error al cargar plantillas:", error);
+      this.userTemplates = [];
+    }
+  }
+
+  /**
+   * Guardar plantillas del usuario en localStorage (temporal)
+   */
+  async saveUserTemplates() {
+    try {
+      if (!this.userId) return;
+
+      const storageKey = `user_templates_${this.userId}`;
+      localStorage.setItem(storageKey, JSON.stringify(this.userTemplates));
+      console.log(
+        `💾 ${this.userTemplates.length} plantillas guardadas en localStorage`
+      );
+    } catch (error) {
+      console.error("❌ Error al guardar plantillas:", error);
+    }
+  }
+
+  /**
+   * Obtener todas las plantillas del usuario
+   */
+  async getUserTemplates() {
+    if (!this.isInitialized) {
+      throw new Error("Servicio de plantillas no inicializado");
+    }
+
+    // Combinar plantillas del sistema y personalizadas
+    const allTemplates = [...this.systemTemplates, ...this.userTemplates];
+
+    console.log(
+      `📋 Total plantillas disponibles: ${allTemplates.length} (${this.systemTemplates.length} sistema + ${this.userTemplates.length} personalizadas)`
+    );
+
+    return allTemplates;
   }
 
   /**
@@ -137,29 +207,20 @@ class TemplateService {
   }
 
   /**
-   * Obtener todas las plantillas del usuario
-   */
-  async getUserTemplates() {
-    if (!this.userId) {
-      throw new Error("Usuario no autenticado");
-    }
-
-    try {
-      // Por ahora, devolver plantillas del sistema
-      // Más adelante agregaremos plantillas personalizadas de Firestore
-      return this.systemTemplates;
-    } catch (error) {
-      console.error("Error al obtener plantillas:", error);
-      throw error;
-    }
-  }
-
-  /**
    * Obtener plantilla por ID
    */
   async getTemplateById(templateId) {
-    const allTemplates = await this.getUserTemplates();
-    return allTemplates.find((t) => t.id === templateId) || null;
+    // Buscar en plantillas del sistema
+    const systemTemplate = this.systemTemplates.find(
+      (t) => t.id === templateId
+    );
+    if (systemTemplate) return systemTemplate;
+
+    // Buscar en plantillas personales
+    const userTemplate = this.userTemplates.find((t) => t.id === templateId);
+    if (userTemplate) return userTemplate;
+
+    return null;
   }
 
   /**
@@ -170,10 +231,10 @@ class TemplateService {
       throw new Error("Usuario no autenticado");
     }
 
-    // Primero, validar los datos básicos (sin id)
+    // Validar datos básicos
     this.validateTemplateData(templateData);
 
-    // Generar ID después de la validación
+    // Generar ID y datos completos
     const newTemplate = {
       id: `template_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       userId: this.userId,
@@ -183,20 +244,24 @@ class TemplateService {
       settings: {
         allowDuplicates: false,
         maxEntries: 0,
-        category: "custom",
+        category: templateData.settings?.category || "custom",
         isSystemTemplate: false,
         version: "1.0",
         ...templateData.settings,
       },
     };
-
     // Validar plantilla completa
     this.validateTemplate(newTemplate);
 
-    // Aquí guardaríamos en Firestore
-    // Por ahora, solo devolver la plantilla creada
+    // Agregar a la lista de plantillas del usuario
+    this.userTemplates.push(newTemplate);
+
+    // Guardar en almacenamiento persistente
+    await this.saveUserTemplates();
+
     console.log("📝 Plantilla creada:", newTemplate.name);
     console.log("🆔 ID generado:", newTemplate.id);
+    console.log("📊 Total plantillas personales:", this.userTemplates.length);
 
     return newTemplate;
   }
@@ -326,13 +391,28 @@ class TemplateService {
 
     console.log("✏️  Actualizando plantilla:", templateId);
 
-    // Por ahora, simular actualización
-    const updatedTemplate = {
+    // Buscar plantilla
+    const templateIndex = this.userTemplates.findIndex(
+      (t) => t.id === templateId
+    );
+
+    if (templateIndex === -1) {
+      throw new Error("Plantilla no encontrada");
+    }
+
+    // Actualizar plantilla
+    this.userTemplates[templateIndex] = {
+      ...this.userTemplates[templateIndex],
       ...updates,
       updatedAt: new Date().toISOString(),
     };
 
-    return updatedTemplate;
+    // Guardar cambios
+    await this.saveUserTemplates();
+
+    console.log("✅ Plantilla actualizada");
+
+    return this.userTemplates[templateIndex];
   }
 
   /**
@@ -350,6 +430,21 @@ class TemplateService {
     if (template?.settings?.isSystemTemplate) {
       throw new Error("No se pueden eliminar plantillas del sistema");
     }
+
+    // Eliminar de la lista
+    const initialLength = this.userTemplates.length;
+    this.userTemplates = this.userTemplates.filter((t) => t.id !== templateId);
+
+    if (this.userTemplates.length === initialLength) {
+      throw new Error("Plantilla no encontrada");
+    }
+
+    // Guardar cambios
+    await this.saveUserTemplates();
+
+    console.log(
+      `✅ Plantilla eliminada. Quedan ${this.userTemplates.length} plantillas personales`
+    );
 
     return { success: true, message: "Plantilla eliminada" };
   }

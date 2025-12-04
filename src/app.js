@@ -45,6 +45,11 @@ async function handleAuthStateChange(user, appElement) {
     // Usuario autenticado - mostrar dashboard
     showDashboard(user, appElement);
 
+    // Inicializar servicios que dependen del usuario
+    templateService.initialize(user.uid).catch((error) => {
+      console.error("Error al inicializar servicio de plantillas:", error);
+    });
+
     // Verificar si el cifrado está inicializado
     await checkAndInitializeEncryption(user);
   } else {
@@ -388,7 +393,8 @@ function setupDashboardListeners() {
   const manageTemplatesBtn = document.getElementById("manageTemplatesBtn");
   if (manageTemplatesBtn) {
     manageTemplatesBtn.addEventListener("click", () => {
-      showTemplateManager();
+      const user = authService.getCurrentUser();
+      showTemplateManager(user);
     });
   }
 }
@@ -396,7 +402,7 @@ function setupDashboardListeners() {
 /**
  * Mostrar gestor de plantillas
  */
-function showTemplateManager() {
+function showTemplateManager(user) {
   const appElement = document.getElementById("app");
   if (!appElement) return;
 
@@ -439,6 +445,7 @@ function showTemplateManager() {
   const container = document.getElementById("templateManagerContainer");
   if (container) {
     container.innerHTML = templateManager.render();
+    templateService.initialize(user.uid);
     templateManager.loadTemplates();
   }
 
