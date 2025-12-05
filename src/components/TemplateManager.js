@@ -116,6 +116,12 @@ export class TemplateManager {
             <button id="debugTemplates" class="text-xs bg-purple-100 text-purple-700 hover:bg-purple-200 px-2 py-1 rounded" title="Debug">
               <i class="fas fa-bug"></i>
             </button>
+            <button id="debugEvents" class="text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 px-2 py-1 rounded" title="Debug Event Listeners">
+              <i class="fas fa-play-circle"></i> Debug Events
+            </button>
+            <button id="syncTemplates" class="text-xs bg-green-100 text-green-700 hover:bg-green-200 px-2 py-1 rounded" title="Sincronizar con la nube">
+              <i class="fas fa-sync-alt"></i> Sincronizar
+            </button>
           </div>
           <div id="customTemplatesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- Se llenará dinámicamente -->
@@ -139,25 +145,37 @@ export class TemplateManager {
     const fieldCount = template.fields.length;
     const sensitiveCount = template.fields.filter((f) => f.sensitive).length;
 
+    // Asegurar que el template tenga ID
+    if (!template.id) {
+      console.error("Template sin ID:", template);
+      template.id = `template_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+    }
+
     return `
-    <div class="template-card border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer" data-template-id="${
-      template.id
-    }">
+    <div class="template-card border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-md transition-all cursor-pointer" 
+         data-template-id="${template.id}"
+         data-template-name="${template.name || ""}">
       <div class="p-4">
         <div class="flex justify-between items-start mb-3">
           <div class="flex items-center">
             <div class="w-10 h-10 rounded-lg flex items-center justify-center text-lg" style="background-color: ${
               template.color
             }20; color: ${template.color}">
-              ${template.icon}
+              ${template.icon || "📋"}
             </div>
             <div class="ml-3">
-              <h4 class="font-bold text-gray-800">${template.name}</h4>
-              <p class="text-xs text-gray-500">${template.description}</p>
+              <h4 class="font-bold text-gray-800">${
+                template.name || "Sin nombre"
+              }</h4>
+              <p class="text-xs text-gray-500">${
+                template.description || "Sin descripción"
+              }</p>
             </div>
           </div>
           ${
-            template.settings.isSystemTemplate
+            template.settings?.isSystemTemplate
               ? `
             <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">
               Sistema
@@ -165,10 +183,14 @@ export class TemplateManager {
           `
               : `
             <div class="flex space-x-1">
-              <button class="edit-template text-gray-400 hover:text-blue-600 p-1" data-template-id="${template.id}">
+              <button class="edit-template text-gray-400 hover:text-blue-600 p-1" 
+                      data-template-id="${template.id}"
+                      title="Editar plantilla">
                 <i class="fas fa-edit"></i>
               </button>
-              <button class="delete-template text-gray-400 hover:text-red-600 p-1" data-template-id="${template.id}">
+              <button class="delete-template text-gray-400 hover:text-red-600 p-1" 
+                      data-template-id="${template.id}"
+                      title="Eliminar plantilla">
                 <i class="fas fa-trash"></i>
               </button>
             </div>
@@ -200,7 +222,7 @@ export class TemplateManager {
               .map(
                 (field) => `
               <span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
-                ${field.label}
+                ${field.label || "Sin etiqueta"}
               </span>
             `
               )
@@ -217,13 +239,59 @@ export class TemplateManager {
           </div>
         </div>
         
-        <button class="use-template-btn w-full mt-4 bg-gray-100 hover:bg-blue-50 text-blue-600 font-medium py-2 px-4 rounded-lg transition flex items-center justify-center">
+        <button class="use-template-btn w-full mt-4 bg-gray-100 hover:bg-blue-50 text-blue-600 font-medium py-2 px-4 rounded-lg transition flex items-center justify-center"
+                data-template-id="${template.id}">
           <i class="fas fa-plus-circle mr-2"></i>
           Usar esta plantilla
         </button>
       </div>
     </div>
   `;
+  }
+
+  /**
+   * Función de debug para event listeners
+   */
+  debugEventListeners() {
+    console.group("🔍 DEBUG - Event Listeners");
+
+    // Contar botones
+    const editButtons = document.querySelectorAll(".edit-template");
+    const deleteButtons = document.querySelectorAll(".delete-template");
+    const useButtons = document.querySelectorAll(".use-template-btn");
+    const cards = document.querySelectorAll(".template-card");
+
+    console.log("📊 Botones encontrados:");
+    console.log(`  ✏️  Editar: ${editButtons.length}`);
+    console.log(`  🗑️  Eliminar: ${deleteButtons.length}`);
+    console.log(`  🎯 Usar: ${useButtons.length}`);
+    console.log(`  🃏 Tarjetas: ${cards.length}`);
+
+    // Verificar data attributes
+    editButtons.forEach((btn, i) => {
+      const templateId = btn.dataset.templateId;
+      console.log(`  Botón editar ${i + 1}:`, templateId || "SIN TEMPLATE ID");
+    });
+
+    // Verificar si los elementos tienen listeners
+    console.log("🎧 Verificando event listeners...");
+
+    // Esta es una función helper para ver listeners (puede no funcionar en todos los navegadores)
+    const hasEventListener = (element, eventType) => {
+      const events = getEventListeners ? getEventListeners(element) : null;
+      return events && events[eventType] && events[eventType].length > 0;
+    };
+
+    if (typeof getEventListeners !== "undefined") {
+      editButtons.forEach((btn, i) => {
+        const hasClick = hasEventListener(btn, "click");
+        console.log(`  Botón editar ${i + 1} tiene listener:`, hasClick);
+      });
+    } else {
+      console.log("ℹ️  getEventListeners no disponible en este navegador");
+    }
+
+    console.groupEnd();
   }
 
   /**
@@ -594,22 +662,45 @@ export class TemplateManager {
 
       content.innerHTML = this.renderLoading();
 
+      // Verificar estado de sincronización
+      const syncStatus = await templateService.checkSyncStatus();
+      console.log("📡 Estado de sincronización:", syncStatus);
+
+      if (syncStatus.needsSync && syncStatus.cloudCount > 0) {
+        // Mostrar notificación de sincronización disponible
+        this.showMessage(
+          `Hay ${syncStatus.cloudCount} plantillas en la nube. <button class="underline font-medium" id="quickSync">Sincronizar ahora</button>`,
+          "info",
+          10000
+        );
+
+        setTimeout(() => {
+          document
+            .getElementById("quickSync")
+            ?.addEventListener("click", async () => {
+              const result = await templateService.syncTemplates();
+              if (result.synced) {
+                this.showSuccess(result.message);
+                this.loadTemplates();
+              }
+            });
+        }, 100);
+      }
+
       // Obtener plantillas y categorías
       const templates = await templateService.getUserTemplates();
       const categories = await templateService.getCategories();
 
-      console.log("📋 Plantillas recibidas:", templates.length);
-      console.log("📊 Desglose:", {
-        sistema: templates.filter((t) => t.settings?.isSystemTemplate).length,
-        personales: templates.filter((t) => !t.settings?.isSystemTemplate)
-          .length,
-      });
-
       // Renderizar lista
       content.innerHTML = this.renderTemplateList(templates, categories);
 
-      // Configurar event listeners
+      // Configurar event listeners (delegación)
       this.setupTemplateListListeners();
+
+      // También agregar listeners directos
+      setTimeout(() => {
+        this.addDirectEventListeners();
+      }, 100); // Pequeño delay para asegurar que el DOM esté listo
 
       // Actualizar contador de plantillas personalizadas
       const customTemplates = templates.filter(
@@ -627,16 +718,11 @@ export class TemplateManager {
 
       if (listElement && noTemplatesElement) {
         if (customTemplates.length > 0) {
-          console.log(
-            "🎨 Renderizando plantillas personales:",
-            customTemplates.map((t) => t.name)
-          );
           listElement.innerHTML = customTemplates
             .map((t) => this.renderTemplateCard(t))
             .join("");
           noTemplatesElement.classList.add("hidden");
         } else {
-          console.log("📭 No hay plantillas personales");
           listElement.innerHTML = "";
           noTemplatesElement.classList.remove("hidden");
         }
@@ -652,9 +738,12 @@ export class TemplateManager {
    */
   setupTemplateListListeners() {
     // Botón nueva plantilla
-    document.getElementById("btnNewTemplate")?.addEventListener("click", () => {
-      this.showTemplateForm();
-    });
+    const newTemplateBtn = document.getElementById("btnNewTemplate");
+    if (newTemplateBtn) {
+      newTemplateBtn.addEventListener("click", () => {
+        this.showTemplateForm();
+      });
+    }
 
     // Filtros por categoría
     document.querySelectorAll(".category-filter").forEach((btn) => {
@@ -664,49 +753,158 @@ export class TemplateManager {
       });
     });
 
-    // Usar plantilla
-    document.querySelectorAll(".use-template-btn").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
+    // USAR DELEGACIÓN DE EVENTOS para elementos dinámicos
+
+    // Contenedor principal para delegación
+    const templateContent = document.getElementById("templateContent");
+    if (!templateContent) return;
+
+    // Delegar evento de clic en "Usar plantilla"
+    templateContent.addEventListener("click", (e) => {
+      // Botón "Usar esta plantilla"
+      if (e.target.closest(".use-template-btn")) {
         const templateCard = e.target.closest(".template-card");
         const templateId = templateCard?.dataset.templateId;
         if (templateId && this.onTemplateSelect) {
           this.onTemplateSelect(templateId);
         }
-      });
-    });
+        e.stopPropagation();
+      }
 
-    // Click en tarjeta de plantilla
-    document.querySelectorAll(".template-card").forEach((card) => {
-      card.addEventListener("click", (e) => {
-        // Evitar que el click en botones active la tarjeta
-        if (!e.target.closest("button")) {
-          const templateId = card.dataset.templateId;
+      // Botón de editar
+      if (e.target.closest(".edit-template")) {
+        const templateId =
+          e.target.closest(".edit-template").dataset.templateId;
+        if (templateId) {
+          this.editTemplate(templateId);
+        }
+        e.stopPropagation();
+      }
+
+      // Botón de eliminar
+      if (e.target.closest(".delete-template")) {
+        const templateId =
+          e.target.closest(".delete-template").dataset.templateId;
+        if (templateId) {
+          this.deleteTemplate(templateId);
+        }
+        e.stopPropagation();
+      }
+
+      // Clic en tarjeta completa (para vista previa)
+      if (
+        e.target.closest(".template-card") &&
+        !e.target.closest("button") &&
+        !e.target.closest("a")
+      ) {
+        const templateCard = e.target.closest(".template-card");
+        const templateId = templateCard?.dataset.templateId;
+        if (templateId) {
           this.showTemplatePreview(templateId);
         }
+      }
+      // En setupTemplateListListeners, agregar:
+      document.getElementById("debugEvents")?.addEventListener("click", () => {
+        this.debugEventListeners();
       });
+      document
+        .getElementById("syncTemplates")
+        ?.addEventListener("click", async () => {
+          const result = await templateService.syncTemplates();
+          if (result.synced) {
+            this.showSuccess(result.message);
+            // Recargar la lista
+            setTimeout(() => this.loadTemplates(), 1000);
+          } else {
+            this.showError(
+              "Error de sincronización: " + (result.error || "Desconocido")
+            );
+          }
+        });
     });
 
-    // Botones de edición y eliminación
+    // También agregar listeners directos como respaldo
+    this.addDirectEventListeners();
+  }
+
+  /**
+   * Agregar event listeners directos como respaldo
+   */
+  addDirectEventListeners() {
+    // Botones de edición
     document.querySelectorAll(".edit-template").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const templateId = btn.dataset.templateId;
-        this.editTemplate(templateId);
-      });
+      btn.removeEventListener("click", this.handleEditClick);
+      btn.addEventListener("click", this.handleEditClick.bind(this));
     });
 
+    // Botones de eliminación
     document.querySelectorAll(".delete-template").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const templateId = btn.dataset.templateId;
-        this.deleteTemplate(templateId);
-      });
+      btn.removeEventListener("click", this.handleDeleteClick);
+      btn.addEventListener("click", this.handleDeleteClick.bind(this));
     });
 
-    // Depurar plantillas
-    document.getElementById("debugTemplates")?.addEventListener("click", () => {
-      this.debugTemplates();
+    // Botones de usar plantilla
+    document.querySelectorAll(".use-template-btn").forEach((btn) => {
+      btn.removeEventListener("click", this.handleUseTemplateClick);
+      btn.addEventListener("click", this.handleUseTemplateClick.bind(this));
     });
+
+    // Tarjetas de plantilla
+    document.querySelectorAll(".template-card").forEach((card) => {
+      card.removeEventListener("click", this.handleCardClick);
+      card.addEventListener("click", this.handleCardClick.bind(this));
+    });
+  }
+
+  /**
+   * Manejador para editar plantilla
+   */
+  handleEditClick(event) {
+    event.stopPropagation();
+    const templateId = event.currentTarget.dataset.templateId;
+    console.log("📝 Editando plantilla:", templateId);
+    if (templateId) {
+      this.editTemplate(templateId);
+    }
+  }
+
+  /**
+   * Manejador para eliminar plantilla
+   */
+  handleDeleteClick(event) {
+    event.stopPropagation();
+    const templateId = event.currentTarget.dataset.templateId;
+    console.log("🗑️  Eliminando plantilla:", templateId);
+    if (templateId) {
+      this.deleteTemplate(templateId);
+    }
+  }
+
+  /**
+   * Manejador para usar plantilla
+   */
+  handleUseTemplateClick(event) {
+    event.stopPropagation();
+    const templateCard = event.target.closest(".template-card");
+    const templateId = templateCard?.dataset.templateId;
+    console.log("🎯 Usando plantilla:", templateId);
+    if (templateId && this.onTemplateSelect) {
+      this.onTemplateSelect(templateId);
+    }
+  }
+
+  /**
+   * Manejador para clic en tarjeta
+   */
+  handleCardClick(event) {
+    // Solo procesar si no se hizo clic en un botón
+    if (!event.target.closest("button") && !event.target.closest("a")) {
+      const templateId = event.currentTarget.dataset.templateId;
+      console.log("👁️  Vista previa de plantilla:", templateId);
+      if (templateId) {
+        this.showTemplatePreview(templateId);
+      }
+    }
   }
 
   /**
