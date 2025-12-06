@@ -23,6 +23,8 @@ export class TemplateManager {
     this.currentView = "list"; // 'list', 'create', 'edit', 'preview'
     this.editingTemplate = null;
     this.tempFormData = null; // Guardar datos del formulario temporalmente (para Preview)
+    this.allTemplates = []; // Lista de todas las plantillas cargadas
+    this.currentCategory = "all"; // Categoría actualmente seleccionada para filtrar
   }
 
   /**
@@ -84,19 +86,38 @@ export class TemplateManager {
     return `
       <div class="space-y-6">
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div class="bg-gray-50 hover:bg-gray-100 rounded-lg p-3 cursor-pointer transition category-filter ${
+            this.currentCategory === "all"
+              ? "border-2 border-blue-500 bg-blue-100"
+              : ""
+          }" data-category="all">
+            <div class="flex items-center">
+              <span class="text-lg mr-2">⭐</span>
+              <div>
+                <p class="font-medium text-gray-800">Todas</p>
+                <p class="text-xs text-gray-500">${
+                  this.allTemplates.length
+                } plantilla${this.allTemplates.length !== 1 ? "s" : ""}</p>
+              </div>
+            </div>
+          </div>
           ${categories
             .map(
               (cat) => `
-            <div class="bg-gray-50 hover:bg-gray-100 rounded-lg p-3 cursor-pointer transition category-filter" data-category="${
-              cat.id
-            }">
+            <div class="bg-gray-50 hover:bg-gray-100 rounded-lg p-3 cursor-pointer transition category-filter ${
+              cat.id === this.currentCategory
+                ? "border-2 border-blue-500 bg-blue-100"
+                : ""
+            }" data-category="${cat.id}">
               <div class="flex items-center">
                 <span class="text-lg mr-2">${getCategoryIcon(cat.id)}</span>
                 <div>
                   <p class="font-medium text-gray-800">${getCategoryName(
                     cat.id
                   )}</p>
-                  <p class="text-xs text-gray-500">${cat.count} plantillas</p>
+                  <p class="text-xs text-gray-500">${cat.count} plantilla${
+                cat.count !== 1 ? "s" : ""
+              }</p>
                 </div>
               </div>
             </div>
@@ -105,42 +126,7 @@ export class TemplateManager {
             .join("")}
         </div>
 
-        ${
-          systemTemplates.length > 0
-            ? `
-        <div>
-          <h3 class="text-lg font-semibold text-gray-800 mb-3">
-            <i class="fas fa-shield-alt mr-2 text-blue-500"></i>
-            Plantillas del Sistema
-          </h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            ${systemTemplates
-              .map((template) => this.renderTemplateCard(template))
-              .join("")}
-          </div>
-        </div>
-        `
-            : ""
-        }
-
         <div id="customTemplatesSection">
-          <div class="flex justify-between items-center mb-3">
-            <h3 class="text-lg font-semibold text-gray-800">
-              <i class="fas fa-user-edit mr-2 text-green-500"></i>
-              Mis Plantillas
-            </h3>
-            <div class="flex space-x-2">
-                 <span id="customTemplatesCount" class="bg-gray-200 text-gray-700 text-xs font-medium px-3 py-1 rounded-full flex items-center">
-                  ${customTemplates.length} plantilla${
-      customTemplates.length !== 1 ? "s" : ""
-    }
-                </span>
-                <button id="syncTemplates" class="text-xs bg-green-100 text-green-700 hover:bg-green-200 px-2 py-1 rounded transition" title="Sincronizar con la nube">
-                  <i class="fas fa-sync-alt"></i> Sincronizar
-                </button>
-            </div>
-          </div>
-          
           <div id="customTemplatesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             ${
               customTemplates.length > 0
@@ -154,10 +140,11 @@ export class TemplateManager {
           <div id="noCustomTemplates" class="${
             customTemplates.length > 0 ? "hidden" : ""
           } text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
-            <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <i class="fas fa-layer-group text-gray-400 text-2xl"></i>
-            </div>
-            <p class="text-gray-600 font-medium">No tienes plantillas creadas</p>
+            <p class="text-gray-600 font-medium">No hay plantillas${
+              this.currentCategory !== "all"
+                ? ` en ${getCategoryName(this.currentCategory)}`
+                : ""
+            }</p>
             <p class="text-gray-500 text-sm mt-1">Crea tu primera plantilla para organizar tus datos</p>
           </div>
         </div>
@@ -303,10 +290,16 @@ export class TemplateManager {
         }, 100);
       }
 
-      const templates = await templateService.getUserTemplates();
+      // 1. Cargar y almacenar todas las plantillas
+      this.allTemplates = await templateService.getUserTemplates();
       const categories = await templateService.getCategories();
+      this.currentCategory = "all"; // Mostrar todas por defecto al cargar
 
-      content.innerHTML = this.renderTemplateList(templates, categories);
+      // 2. Renderizar la lista
+      content.innerHTML = this.renderTemplateList(
+        this.allTemplates,
+        categories
+      );
       this.setupTemplateListListeners();
     } catch (error) {
       console.error("Error al cargar plantillas:", error);
@@ -983,30 +976,43 @@ export class TemplateManager {
   }
 
   /**
-   * Filtrar (mensaje informativo) plantillas por categoría
+   * Realiza el filtrado de plantillas por categoría y re-renderiza la lista.
    */
   async filterTemplatesByCategory(category) {
-    try {
-      const allTemplates = await templateService.getUserTemplates();
-      const filtered =
-        category === "all"
-          ? allTemplates
-          : allTemplates.filter((t) => t.settings.category === category);
-
-      // USO DE HELPER: getCategoryName
-      const catName = getCategoryName(category);
-
-      this.showMessage(
-        `Mostrando ${filtered.length} plantilla${
-          filtered.length !== 1 ? "s" : ""
-        } en categoría: ${catName}`
-      );
-
-      // Para una implementación completa: volver a renderTemplateList con los datos filtrados
-      // Si solo querías el mensaje, el código ya está listo.
-    } catch (error) {
-      console.error("Error al filtrar plantillas:", error);
+    if (this.currentCategory === category) {
+      // Si la categoría ya está activa, no hacemos nada.
+      return;
     }
+
+    // 1. Actualizar el estado del filtro
+    this.currentCategory = category;
+    const categories = await templateService.getCategories(); // Se necesita para el render
+
+    // 2. Filtrar las plantillas
+    const filteredTemplates =
+      category === "all"
+        ? this.allTemplates // Mostrar todas
+        : this.allTemplates.filter((t) => t.settings.category === category);
+
+    // 3. Re-renderizar el contenido de la lista
+    const content = document.getElementById("templateContent");
+    if (content) {
+      content.innerHTML = this.renderTemplateList(
+        filteredTemplates,
+        categories
+      );
+      this.setupTemplateListListeners(); // ¡Importante! Re-configurar listeners
+    }
+
+    // 4. Mostrar mensaje de confirmación
+    const catName = getCategoryName(category);
+    this.showMessage(
+      `Mostrando ${filteredTemplates.length} plantilla${
+        filteredTemplates.length !== 1 ? "s" : ""
+      } en categoría: ${catName}`,
+      "info",
+      3000
+    );
   }
 
   // --- Métodos de Utilidad UI ---

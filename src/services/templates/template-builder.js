@@ -9,7 +9,7 @@ class TemplateBuilder {
    * Obtener tipos de campo válidos (solo los originales)
    */
   getValidFieldTypes() {
-    return ["string", "number", "boolean", "text", "date", "url"];
+    return ["string", "number", "boolean", "text", "date", "url", "email"];
   }
 
   /**

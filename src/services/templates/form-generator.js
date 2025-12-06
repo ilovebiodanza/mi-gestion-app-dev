@@ -38,6 +38,11 @@ class TemplateFormGenerator {
         }" ${requiredAttr}>${currentValue}</textarea>`;
         break;
       case "url":
+        inputType = "url";
+        break;
+      case "email":
+        inputType = "email";
+        break;
       case "string":
       default:
         // Input tipo texto para string, url, etc.
