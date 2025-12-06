@@ -151,3 +151,15 @@ button:disabled {
     transform: rotate(360deg);
   }
 }
+
+/* Estilos básicos para el handle */
+.drag-handle {
+  cursor: grab;
+}
+
+/* Estilo del elemento fantasma (ghostClass) */
+.sortable-ghost {
+  opacity: 0.4;
+  background-color: #f3f4f6; /* color gris claro */
+  border: 2px dashed #9ca3af; /* borde punteado */
+}
