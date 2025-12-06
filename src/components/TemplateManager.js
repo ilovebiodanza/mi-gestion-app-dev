@@ -5,7 +5,7 @@
  * - Muestra la lista de plantillas.
  * - Permite Crear/Editar plantillas mediante formularios.
  * - Centraliza las operaciones CRUD, delegando la lógica de negocio a templateService.
- * - Utiliza helpers.js para las funciones de formateo (ej: generar ID, nombres de categoría).
+ * - Utiliza helpers.js para las funciones de formateo (ej: generar ID, nombres de categoría, ICONOS).
  */
 
 import { templateService } from "../services/templates/index.js";
@@ -381,6 +381,22 @@ export class TemplateManager {
           .join("")
       : "";
 
+    const currentCategory = template?.settings?.category || "custom";
+    const initialIcon = template?.icon || getCategoryIcon(currentCategory);
+
+    // Opciones de categoría actualizadas (basadas en helpers.js)
+    const categoryOptions = [
+      { value: "custom", label: "Personalizado" },
+      { value: "personal", label: "Personal" },
+      { value: "access", label: "Accesos" },
+      { value: "financial", label: "Financiero" },
+      { value: "health", label: "Salud" },
+      { value: "home", label: "Hogar" },
+      { value: "car", label: "Vehículo" },
+      { value: "job", label: "Trabajo" },
+      { value: "education", label: "Formación" },
+    ];
+
     return `
       <div class="max-w-4xl mx-auto">
         <div class="mb-6">
@@ -415,30 +431,28 @@ export class TemplateManager {
               </div>
               
               <div>
-                <label for="templateDescription" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                <input type="text" id="templateDescription" value="${
-                  template?.description || ""
-                }" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="Breve descripción de la plantilla" />
+                <label for="templateCategory" class="block text-sm font-medium text-gray-700 mb-1">
+                  Categoría *
+                </label>
+                <select id="templateCategory" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                  ${categoryOptions
+                    .map(
+                      (opt) => `
+                    <option value="${opt.value}" ${
+                        opt.value === currentCategory ? "selected" : ""
+                      }>
+                      ${getCategoryIcon(opt.value)} ${opt.label}
+                    </option>
+                  `
+                    )
+                    .join("")}
+                </select>
               </div>
               
               <div>
                 <label for="templateIcon" class="block text-sm font-medium text-gray-700 mb-1">Icono</label>
-                <div class="flex items-center space-x-2">
-                  <input type="text" id="templateIcon" value="${
-                    template?.icon || "📋"
-                  }" class="w-16 text-center px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="📋" />
-                  <select id="iconPicker" class="flex-grow px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                    <option value="📋">📋 Plantilla</option>
-                    <option value="👤">👤 Personal</option>
-                    <option value="🔐">🔐 Accesos</option>
-                    <option value="💰">💰 Financiero</option>
-                    <option value="🏥">🏥 Salud</option>
-                    <option value="🏠">🏠 Hogar</option>
-                    <option value="🚗">🚗 Vehículo</option>
-                    <option value="💼">💼 Trabajo</option>
-                    <option value="🎓">🎓 Educación</option>
-                  </select>
-                </div>
+                <input type="text" id="templateIcon" value="${initialIcon}" 
+                       maxlength="2" class="w-16 text-center px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="📋" />
               </div>
               
               <div>
@@ -447,6 +461,14 @@ export class TemplateManager {
                   template?.color || "#3B82F6"
                 }" class="w-full h-10 px-1 border border-gray-300 rounded-lg cursor-pointer" />
               </div>
+
+            </div>
+
+            <div class="mt-4">
+                <label for="templateDescription" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                <input type="text" id="templateDescription" value="${
+                  template?.description || ""
+                }" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="Breve descripción de la plantilla" />
             </div>
           </div>
 
@@ -482,7 +504,7 @@ export class TemplateManager {
           <div class="bg-white border border-gray-200 rounded-lg p-6">
             <h4 class="font-semibold text-gray-800 mb-4">
               <i class="fas fa-cogs mr-2 text-purple-500"></i>
-              Configuración
+              Configuración Adicional
             </h4>
             
             <div class="space-y-4">
@@ -500,45 +522,7 @@ export class TemplateManager {
                 }" min="0" class="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" />
               </div>
               
-              <div>
-                <label for="templateCategory" class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                <select id="templateCategory" class="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                  <option value="custom" ${
-                    template?.settings?.category === "custom" ? "selected" : ""
-                  }>Personalizado</option>
-                  <option value="personal" ${
-                    template?.settings?.category === "personal"
-                      ? "selected"
-                      : ""
-                  }>Personal</option>
-                  <option value="access" ${
-                    template?.settings?.category === "access" ? "selected" : ""
-                  }>Accesos</option>
-                  <option value="financial" ${
-                    template?.settings?.category === "financial"
-                      ? "selected"
-                      : ""
-                  }>Financiero</option>
-                  <option value="health" ${
-                    template?.settings?.category === "health" ? "selected" : ""
-                  }>Salud</option>
-                  <option value="home" ${
-                    template?.settings?.category === "home" ? "selected" : ""
-                  }>Hogar</option>
-                  <option value="car" ${
-                    template?.settings?.category === "car" ? "selected" : ""
-                  }>Vehículo</option>
-                  <option value="job" ${
-                    template?.settings?.category === "job" ? "selected" : ""
-                  }>Trabajo</option>
-                  <option value="education" ${
-                    template?.settings?.category === "education"
-                      ? "selected"
-                      : ""
-                  }>Educación</option>
-                </select>
               </div>
-            </div>
           </div>
 
           <div class="flex justify-between pt-4 border-t border-gray-200">
@@ -676,14 +660,14 @@ export class TemplateManager {
    * Configurar listeners para el formulario de plantilla
    */
   setupTemplateFormListeners() {
-    // Icon Picker
-    const iconPicker = document.getElementById("iconPicker");
+    // CAMBIO: Listener para actualizar el icono al cambiar la categoría
+    const categorySelect = document.getElementById("templateCategory");
     const iconInput = document.getElementById("templateIcon");
-    if (iconPicker && iconInput) {
-      iconPicker.addEventListener(
-        "change",
-        (e) => (iconInput.value = e.target.value)
-      );
+    if (categorySelect && iconInput) {
+      categorySelect.addEventListener("change", (e) => {
+        // Usar la función helper para obtener el icono sugerido
+        iconInput.value = getCategoryIcon(e.target.value);
+      });
     }
 
     // Add Field
@@ -765,6 +749,7 @@ export class TemplateManager {
       document.getElementById("allowDuplicates")?.checked || false;
     const maxEntries =
       parseInt(document.getElementById("maxEntries")?.value) || 0;
+    // CAMBIO: templateCategory ahora está en el bloque de Información Básica, pero se accede igual.
     const category =
       document.getElementById("templateCategory")?.value || "custom";
 
@@ -806,9 +791,7 @@ export class TemplateManager {
       });
     });
 
-    // La lista 'fields' ya está en el orden visual del DOM,
-    // por lo que no se necesita reordenación manual.
-    // fields.sort((a, b) => a.order - b.order); // REMOVIDO: No es necesario.
+    // La lista 'fields' ya está en el orden visual del DOM.
 
     return {
       name: name.trim(),
@@ -974,11 +957,16 @@ export class TemplateManager {
   renderFieldPreview(field) {
     // USO DE HELPER: getFieldTypeLabel
     const typeLabel = getFieldTypeLabel(field.type);
+
     return `
         <div class="mb-4">
-           <label class="block text-sm font-medium text-gray-700">${
-             field.label
-           } 
+           <label class="block text-sm font-medium text-gray-700">
+             ${field.label} 
+             ${
+               field.required
+                 ? '<span class="text-red-600 ml-1 font-bold" title="Campo Obligatorio">*</span>'
+                 : ""
+             }
              ${
                field.sensitive
                  ? '<i class="fas fa-lock text-red-500 ml-1" title="Campo Sensible"></i>'
@@ -989,7 +977,7 @@ export class TemplateManager {
                   placeholder="${
                     field.placeholder || "Campo de tipo: " + typeLabel
                   }" 
-                  value="${field.required ? "(* Requerido)" : ""}">
+                  value=""> 
         </div>
       `;
   }
