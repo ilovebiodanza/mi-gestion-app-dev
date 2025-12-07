@@ -18,10 +18,8 @@ export async function deriveMasterKey(password, salt) {
   try {
     console.log("🔑 Derivando clave maestra...");
 
-    // Convertir password a ArrayBuffer
     const passwordBuffer = new TextEncoder().encode(password);
 
-    // Importar password como clave
     const passwordKey = await crypto.subtle.importKey(
       "raw",
       passwordBuffer,
@@ -30,7 +28,7 @@ export async function deriveMasterKey(password, salt) {
       ["deriveKey"]
     );
 
-    // Derivar clave maestra usando PBKDF2
+    // CORRECCIÓN AQUÍ: Cambiar false a true
     const masterKey = await crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
@@ -43,11 +41,11 @@ export async function deriveMasterKey(password, salt) {
         name: "AES-GCM",
         length: 256,
       },
-      false,
+      true, // <--- ¡IMPORTANTE! Debe ser TRUE para poder hacer exportKey después
       ["encrypt", "decrypt"]
     );
 
-    // Exportar clave para almacenamiento en memoria
+    // Ahora esto funcionará porque la clave es extraíble
     const exportedKey = await crypto.subtle.exportKey("raw", masterKey);
 
     console.log("✅ Clave maestra derivada (256 bits)");

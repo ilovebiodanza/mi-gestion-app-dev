@@ -98,6 +98,11 @@ class FirebaseCDNService {
     // Pasar el objeto de datos limpio a la función original de Firebase
     return this.modules.setDoc(ref, cleanedData, options);
   }
+  deleteDoc(ref) {
+    // Llama a la función original de Firebase
+    return this.modules.deleteDoc(ref);
+  }
+
   doc(path) {
     return this.modules.doc(this.db, path);
   }

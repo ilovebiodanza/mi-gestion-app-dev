@@ -217,12 +217,23 @@ export class PasswordPrompt {
       </div>
     `;
 
-    const form = document.querySelector("#encryptionPromptOverlay .bg-white");
-    if (form) {
-      form.insertBefore(errorDiv, form.querySelector(".flex.space-x-3"));
+    // CORRECCIÓN: Seleccionar el contenedor padre correcto (.space-y-4)
+    // Los botones (.flex.space-x-3) son hijos directos de este contenedor
+    const container = document.querySelector(
+      "#encryptionPromptOverlay .space-y-4"
+    );
+    const buttons = container?.querySelector(".flex.space-x-3");
+
+    if (container && buttons) {
+      container.insertBefore(errorDiv, buttons);
+    } else {
+      // Fallback por si cambia la estructura
+      const mainCard = document.querySelector(
+        "#encryptionPromptOverlay .bg-white"
+      );
+      if (mainCard) mainCard.appendChild(errorDiv);
     }
   }
-
   /**
    * Limpiar errores
    */

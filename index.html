@@ -31,15 +31,21 @@
         updatePassword,
         onAuthStateChanged,
       } from "https://www.gstatic.com/firebasejs/10.3.0/firebase-auth.js";
+
+      // 👇👇👇 AQUÍ ESTÁ EL CAMBIO IMPORTANTE 👇👇👇
       import {
         getFirestore,
         doc,
         setDoc,
         getDoc,
+        collection, // Nuevo
+        getDocs, // Nuevo
+        query, // Nuevo
+        orderBy, // Nuevo
+        deleteDoc,
       } from "https://www.gstatic.com/firebasejs/10.3.0/firebase-firestore.js";
 
       // Your web app's Firebase configuration
-      // ¡REEMPLAZA ESTOS VALORES CON TUS CREDENCIALES!
       const firebaseConfig = {
         apiKey: "AIzaSyBJgDqHiHD8mncuRNlw8eA1ismr_fcvj2E",
         authDomain: "mi-gestion-e2ee.firebaseapp.com",
@@ -75,9 +81,16 @@
         doc,
         setDoc,
         getDoc,
+
+        // 👇👇👇 AGREGAR ESTAS EXPORTACIONES 👇👇👇
+        collection,
+        getDocs,
+        query,
+        orderBy,
+        deleteDoc,
       };
 
-      console.log("✅ Firebase inicializado desde CDN");
+      console.log("✅ Firebase inicializado desde CDN (Full)");
     </script>
 
     <!-- Favicon -->

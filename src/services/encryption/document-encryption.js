@@ -1,3 +1,8 @@
+// src/services/encryption/document-encryption.js
+
+// 👇👇👇 AGREGA ESTA LÍNEA AL PRINCIPIO 👇👇👇
+import { encryptData, decryptData } from "./encryption-core.js";
+
 /**
  * Cifrado específico para documentos de Mi Gestión
  */
@@ -18,27 +23,30 @@ export async function encryptDocument(data, masterKey, documentId = null) {
   try {
     console.log("🔐 Cifrando documento...");
 
-    // Generar clave de elemento única para este documento
+    // CORRECCIÓN CLAVE: Definir el ID FINAL antes de empezar a cifrar
+    const finalDocId = documentId || generateDocumentId();
+
+    // Generar clave de elemento única
     const itemKey = generateItemKey();
 
-    // Cifrar el contenido del documento con la clave de elemento
+    // Cifrar el contenido (El contenido no usa additionalData por ahora)
     const encryptedContent = await encryptData(data, itemKey);
 
-    // Cifrar la clave de elemento con la clave maestra
+    // Cifrar la clave de elemento usando la Clave Maestra
+    // IMPORTANTE: Usamos finalDocId como 'additionalData' para vincular el cifrado a este documento específico
     const encryptedItemKey = await encryptData(
-      Array.from(itemKey), // Convertir a array para JSON
+      Array.from(itemKey),
       masterKey,
-      documentId || "item_key"
+      finalDocId // <--- AHORA USAMOS EL ID REAL
     );
 
-    // Calcular hash del contenido para verificación de integridad
     const contentHash = await calculateContentHash(data);
 
     return {
       content: encryptedContent,
       metadata: {
         itemKey: encryptedItemKey,
-        documentId: documentId || generateDocumentId(),
+        documentId: finalDocId, // <--- GUARDAMOS EL MISMO ID QUE USAMOS
         contentHash: contentHash,
         encryptedAt: new Date().toISOString(),
         version: "1.0",
@@ -79,15 +87,13 @@ export async function decryptDocument(encryptedDocument, masterKey) {
       console.warn(
         "⚠️  Hash de contenido no coincide - posible corrupción de datos"
       );
-      // Continuamos de todos modos, pero registramos la advertencia
     }
 
     return decryptedContent;
   } catch (error) {
     console.error("❌ Error al descifrar documento:", error);
 
-    // Error más específico
-    if (error.message.includes("Contraseña incorrecta")) {
+    if (error.message && error.message.includes("Contraseña incorrecta")) {
       throw new Error(
         "No se puede descifrar: contraseña incorrecta o datos corruptos"
       );
@@ -118,64 +124,4 @@ async function calculateContentHash(data) {
  */
 function generateDocumentId() {
   return "doc_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-}
-
-/**
- * Cifrar múltiples documentos en lote
- */
-export async function encryptDocumentsBatch(documents, masterKey) {
-  const results = [];
-
-  for (const [index, doc] of documents.entries()) {
-    try {
-      const encrypted = await encryptDocument(doc.data, masterKey, doc.id);
-      results.push({
-        id: doc.id,
-        encrypted,
-        success: true,
-      });
-
-      console.log(`✅ Documento ${index + 1}/${documents.length} cifrado`);
-    } catch (error) {
-      console.error(`❌ Error cifrando documento ${doc.id}:`, error);
-      results.push({
-        id: doc.id,
-        error: error.message,
-        success: false,
-      });
-    }
-  }
-
-  return results;
-}
-
-/**
- * Descifrar múltiples documentos en lote
- */
-export async function decryptDocumentsBatch(encryptedDocuments, masterKey) {
-  const results = [];
-
-  for (const [index, encDoc] of encryptedDocuments.entries()) {
-    try {
-      const decrypted = await decryptDocument(encDoc, masterKey);
-      results.push({
-        id: encDoc.metadata?.documentId || `doc_${index}`,
-        data: decrypted,
-        success: true,
-      });
-
-      console.log(
-        `✅ Documento ${index + 1}/${encryptedDocuments.length} descifrado`
-      );
-    } catch (error) {
-      console.error(`❌ Error descifrando documento ${index}:`, error);
-      results.push({
-        id: `doc_${index}`,
-        error: error.message,
-        success: false,
-      });
-    }
-  }
-
-  return results;
 }

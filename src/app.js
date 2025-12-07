@@ -6,6 +6,9 @@ import { encryptionService } from "./services/encryption/index.js";
 import { EncryptionTest } from "./components/EncryptionTest.js";
 import { TemplateManager } from "./components/TemplateManager.js";
 import { templateService } from "./services/templates/index.js";
+import { DocumentEditor } from "./components/DocumentEditor.js";
+import { VaultList } from "./components/VaultList.js"; // IMPORTAR EL NUEVO COMPONENTE
+import { DocumentViewer } from "./components/DocumentViewer.js";
 
 console.log("Mi Gestión - Aplicación inicializada");
 
@@ -14,6 +17,77 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("DOM cargado");
   initializeApplication();
 });
+
+/**
+ * Mostrar editor de documentos (Creación)
+ * CORREGIDO: Pasa el objeto { template } correctamente al constructor
+ */
+async function showDocumentEditor(templateId, user) {
+  const appElement = document.getElementById("app");
+
+  appElement.innerHTML = `
+    <div class="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+    </div>`;
+
+  try {
+    const template = await templateService.getTemplateById(templateId);
+
+    // CORRECCIÓN AQUÍ: Envolvemos template en un objeto
+    const editor = new DocumentEditor(
+      { template: template }, // <--- CAMBIO CLAVE: Antes era solo 'template'
+      () => {
+        showDashboard(user, appElement);
+        // Opcional: Mostrar mensaje de éxito
+      },
+      () => {
+        showTemplateManager(user);
+      }
+    );
+
+    appElement.innerHTML = `
+      <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+        <div id="editorContainer"></div>
+      </div>
+    `;
+
+    document.getElementById("editorContainer").innerHTML = editor.render();
+    editor.setupEventListeners();
+  } catch (error) {
+    console.error("Error cargando editor:", error);
+    alert("Error al cargar la plantilla: " + error.message);
+    showTemplateManager(user);
+  }
+}
+
+/**
+ * Función auxiliar para abrir el editor en modo Edición
+ * (Añadir esta función al final o cerca de showDocumentEditor)
+ */
+function openEditorForUpdate(initialData, user) {
+  const appElement = document.getElementById("app");
+
+  const editor = new DocumentEditor(
+    initialData, // Pasamos los datos completos { documentId, template, formData... }
+    () => {
+      // Al guardar cambios, volvemos a ver el documento actualizado
+      showDocumentDetails(initialData.documentId, user);
+    },
+    () => {
+      // Al cancelar, volvemos al visor del documento
+      showDocumentDetails(initialData.documentId, user);
+    }
+  );
+
+  appElement.innerHTML = `
+    <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div id="editorContainer"></div>
+    </div>
+  `;
+
+  document.getElementById("editorContainer").innerHTML = editor.render();
+  editor.setupEventListeners();
+}
 
 /**
  * Función principal para inicializar la aplicación
@@ -317,6 +391,7 @@ function showDashboard(user, appElement) {
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1"
   ) {
+    /*
     appElement.innerHTML += `
       <div class="mt-12 max-w-7xl mx-auto px-4">
         <div class="border-t border-gray-200 pt-8">
@@ -340,10 +415,82 @@ function showDashboard(user, appElement) {
     }, 100);
     // Inicializar servicio de plantillas con el usuario
     templateService.initialize(user.uid);
+    */
   }
 
   // Configurar event listeners del dashboard
   setupDashboardListeners();
+
+  // Cargar la vista de VaultList por defecto al inicio
+  showVaultListView(user);
+}
+
+/**
+ * Mostrar la vista de lista de la bóveda (NUEVA FUNCIÓN)
+ */
+function showVaultListView(user) {
+  const mainContainer = document.querySelector("main"); // O usa un ID específico si lo agregas
+  if (!mainContainer) return;
+
+  // Limpiar contenido actual del main
+  mainContainer.innerHTML = `
+    <div class="mb-6 flex justify-between items-center">
+      <div>
+        <h2 class="text-2xl font-bold text-gray-800">Mis Datos</h2>
+        <p class="text-gray-600">Información protegida y cifrada</p>
+      </div>
+      <button id="btnNewDocVault" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center shadow-sm">
+        <i class="fas fa-plus mr-2"></i> Nuevo
+      </button>
+    </div>
+    
+    <div id="vaultListContainer"></div>
+  `;
+
+  // Inicializar componente
+  const vaultList = new VaultList(
+    (docId) => {
+      // CAMBIO AQUÍ: Llamar a la función real
+      console.log("Abrir documento cifrado:", docId);
+      showDocumentDetails(docId, user); // <--- CONEXIÓN REALIZADA
+    },
+    () => {
+      showTemplateManager(user);
+    }
+  );
+
+  // Listener para el botón "Nuevo" de esta vista
+  document.getElementById("btnNewDocVault")?.addEventListener("click", () => {
+    showTemplateManager(user);
+  });
+
+  // Cargar datos
+  vaultList.loadDocuments();
+}
+
+// 3. NUEVA FUNCIÓN: Mostrar detalles del documento
+async function showDocumentDetails(docId, user) {
+  const appElement = document.getElementById("app");
+
+  // Estructura base
+  appElement.innerHTML = `
+    <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div id="documentViewerPlaceholder"></div>
+    </div>
+  `;
+
+  const container = document.getElementById("documentViewerPlaceholder");
+
+  // Instanciar visor
+  const viewer = new DocumentViewer(docId, () => {
+    // Al volver, regresamos a la lista
+    showDashboard(user, appElement);
+    // Nota: showDashboard llama a showVaultListView por defecto según tu última config
+  });
+
+  // Renderizar contenedor y cargar datos
+  container.innerHTML = viewer.render();
+  await viewer.load(); // Iniciar proceso de carga y descifrado
 }
 
 /**
@@ -397,6 +544,17 @@ function setupDashboardListeners() {
       showTemplateManager(user);
     });
   }
+
+  // Listener para navegación "Mis Datos"
+  // Nota: Debes agregar id="navMyData" al enlace en el HTML del dashboard
+  const navMyData = document.querySelector('a[href="#mis-datos"]'); // O agregale ID
+  if (navMyData) {
+    navMyData.addEventListener("click", (e) => {
+      e.preventDefault();
+      const user = authService.getCurrentUser();
+      showVaultListView(user);
+    });
+  }
 }
 
 /**
@@ -410,9 +568,9 @@ function showTemplateManager(user) {
     // Cuando se selecciona una plantilla
     console.log("Plantilla seleccionada:", templateId);
     // Aquí podrías redirigir a crear un nuevo documento con esta plantilla
-    alert(
-      `Plantilla ${templateId} seleccionada. Aquí crearías un nuevo documento.`
-    );
+    // CAMBIO AQUÍ: Llamar al editor real en lugar del alert
+    console.log("Plantilla seleccionada:", templateId);
+    showDocumentEditor(templateId, user);
   });
 
   appElement.innerHTML = `
