@@ -1,6 +1,39 @@
 // src/utils/helpers.js
 // Importar el nuevo archivo de configuración
 import { getFieldTypeMetadata } from "./field-types-config.js"; // NUEVO IMPORT
+
+/**
+ * Mapa de configuración regional para monedas
+ */
+export const idiomasYMonedas = {
+  "es-VE": { moneda: "Bolívar", codigo: "VES" },
+  "es-ES": { moneda: "Euro", codigo: "EUR" },
+  "en-US": { moneda: "Dólar estadounidense", codigo: "USD" },
+  "en-GB": { moneda: "Libra esterlina", codigo: "GBP" },
+  "fr-FR": { moneda: "Euro", codigo: "EUR" },
+  "pt-BR": { moneda: "Real brasileño", codigo: "BRL" },
+};
+
+/**
+ * Obtiene la configuración de moneda basada en el navegador del usuario
+ */
+export const getLocalCurrency = () => {
+  // 1. Detectar idioma del navegador (ej: "es-ES", "en-US")
+  const browserLang = navigator.language;
+  console.log(`🧏 Lenguaje del navegador: ${browserLang}`);
+
+  // 2. Buscar en el mapa
+  const config = idiomasYMonedas[browserLang];
+
+  // 3. Retornar configuración encontrada o Default (USD)
+  if (config) {
+    return { locale: browserLang, ...config };
+  } else {
+    // Fallback: Si el idioma no está en la lista (ej: es-MX), usamos USD por defecto
+    return { locale: "en-US", ...idiomasYMonedas["en-US"] };
+  }
+};
+
 /**
  * Convierte una etiqueta de texto (ej: "Nombre Completo") en un ID válido (ej: "nombre_completo")
  */

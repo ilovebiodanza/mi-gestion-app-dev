@@ -3,12 +3,12 @@
 import { documentService } from "../services/documents/index.js";
 import { templateService } from "../services/templates/index.js";
 import { encryptionService } from "../services/encryption/index.js";
-import { getFieldTypeLabel } from "../utils/helpers.js";
+// 👇 IMPORTAR LA NUEVA FUNCIÓN 👇
+import { getFieldTypeLabel, getLocalCurrency } from "../utils/helpers.js";
 
 export class DocumentViewer {
   constructor(docId, onBack) {
     this.docId = docId;
-    // onBack ahora puede recibir datos si se trata de una acción de edición
     this.onBack = onBack;
     this.document = null;
     this.template = null;
@@ -88,6 +88,9 @@ export class DocumentViewer {
 
     const date = new Date(this.document.metadata.updatedAt).toLocaleString();
 
+    // 👇 OBTENER CONFIGURACIÓN DE MONEDA LOCAL 👇
+    const currencyConfig = getLocalCurrency();
+
     // Generar HTML de los campos
     const fieldsHtml = this.template.fields
       .map((field) => {
@@ -107,9 +110,10 @@ export class DocumentViewer {
             ? '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">Sí</span>'
             : '<span class="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm">No</span>';
         } else if (field.type === "currency" && typeof value === "number") {
-          displayValue = new Intl.NumberFormat("es-ES", {
+          // 👇 USO DE LA MONEDA DINÁMICA 👇
+          displayValue = new Intl.NumberFormat(currencyConfig.locale, {
             style: "currency",
-            currency: "USD",
+            currency: currencyConfig.codigo,
           }).format(value);
         } else if (field.type === "percentage" && typeof value === "number") {
           displayValue = `${value}%`;
