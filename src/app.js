@@ -3,12 +3,14 @@ import { authService } from "./services/auth.js";
 import { AuthForms } from "./components/AuthForms.js";
 import { PasswordPrompt } from "./components/PasswordPrompt.js";
 import { encryptionService } from "./services/encryption/index.js";
-import { EncryptionTest } from "./components/EncryptionTest.js";
 import { TemplateManager } from "./components/TemplateManager.js";
 import { templateService } from "./services/templates/index.js";
 import { DocumentEditor } from "./components/DocumentEditor.js";
-import { VaultList } from "./components/VaultList.js"; // IMPORTAR EL NUEVO COMPONENTE
+import { VaultList } from "./components/VaultList.js";
 import { DocumentViewer } from "./components/DocumentViewer.js";
+
+// Eliminamos importaciones de prueba que ya no se usan
+// import { EncryptionTest } from "./components/EncryptionTest.js";
 
 console.log("Mi Gestión - Aplicación inicializada");
 
@@ -19,79 +21,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /**
- * Mostrar editor de documentos (Creación)
- * CORREGIDO: Pasa el objeto { template } correctamente al constructor
- */
-async function showDocumentEditor(templateId, user) {
-  const appElement = document.getElementById("app");
-
-  appElement.innerHTML = `
-    <div class="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-    </div>`;
-
-  try {
-    const template = await templateService.getTemplateById(templateId);
-
-    // CORRECCIÓN AQUÍ: Envolvemos template en un objeto
-    const editor = new DocumentEditor(
-      { template: template }, // <--- CAMBIO CLAVE: Antes era solo 'template'
-      () => {
-        showDashboard(user, appElement);
-        // Opcional: Mostrar mensaje de éxito
-      },
-      () => {
-        showTemplateManager(user);
-      }
-    );
-
-    appElement.innerHTML = `
-      <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-        <div id="editorContainer"></div>
-      </div>
-    `;
-
-    document.getElementById("editorContainer").innerHTML = editor.render();
-    editor.setupEventListeners();
-  } catch (error) {
-    console.error("Error cargando editor:", error);
-    alert("Error al cargar la plantilla: " + error.message);
-    showTemplateManager(user);
-  }
-}
-
-/**
- * Función auxiliar para abrir el editor en modo Edición
- * (Añadir esta función al final o cerca de showDocumentEditor)
- */
-function openEditorForUpdate(initialData, user) {
-  const appElement = document.getElementById("app");
-
-  const editor = new DocumentEditor(
-    initialData, // Pasamos los datos completos { documentId, template, formData... }
-    () => {
-      // Al guardar cambios, volvemos a ver el documento actualizado
-      showDocumentDetails(initialData.documentId, user);
-    },
-    () => {
-      // Al cancelar, volvemos al visor del documento
-      showDocumentDetails(initialData.documentId, user);
-    }
-  );
-
-  appElement.innerHTML = `
-    <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div id="editorContainer"></div>
-    </div>
-  `;
-
-  document.getElementById("editorContainer").innerHTML = editor.render();
-  editor.setupEventListeners();
-}
-
-/**
  * Función principal para inicializar la aplicación
- * (Renombrada de initApp para evitar conflicto)
  */
 async function initializeApplication() {
   const appElement = document.getElementById("app");
@@ -171,10 +101,7 @@ async function checkAndInitializeEncryption(user) {
  */
 function showAuthForms(appElement) {
   const authForms = new AuthForms((userData) => {
-    // Cuando la autenticación es exitosa
     console.log("✅ Auth success callback:", userData);
-    // El listener de authService ya manejará la transición
-    // No necesitamos hacer nada aquí
   });
 
   appElement.innerHTML = `
@@ -191,20 +118,12 @@ function showAuthForms(appElement) {
         <div id="authContainer"></div>
         
         <div class="mt-8 text-center text-sm text-gray-500">
-          <p>
-            <i class="fas fa-lock mr-1"></i>
-            Tus datos nunca salen de tu dispositivo cifrados
-          </p>
-          <p class="mt-1">
-            <i class="fas fa-user-shield mr-1"></i>
-            Solo tú puedes acceder a tu información
-          </p>
+          <p><i class="fas fa-lock mr-1"></i> Tus datos nunca salen de tu dispositivo cifrados</p>
         </div>
       </div>
     </div>
   `;
 
-  // Inicializar formularios de autenticación
   const authContainer = document.getElementById("authContainer");
   if (authContainer) {
     authForms.updateView(authContainer);
@@ -217,7 +136,6 @@ function showAuthForms(appElement) {
 function showDashboard(user, appElement) {
   appElement.innerHTML = `
     <div class="min-h-screen bg-gray-50">
-      <!-- Navbar -->
       <nav class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between h-16">
@@ -228,10 +146,10 @@ function showDashboard(user, appElement) {
               </div>
               <div class="hidden md:block ml-10">
                 <div class="flex space-x-4">
-                  <a href="#" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium">
+                  <a href="#" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium" id="navHome">
                     <i class="fas fa-home mr-1"></i> Inicio
                   </a>
-                  <a href="#" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium">
+                  <a href="#mis-datos" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium" id="navMyData">
                     <i class="fas fa-database mr-1"></i> Mis Datos
                   </a>
                   <a href="#" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium">
@@ -245,7 +163,6 @@ function showDashboard(user, appElement) {
               <div class="flex items-center space-x-3">
                 <div class="text-right hidden md:block">
                   <p class="text-sm font-medium text-gray-700">${user.email}</p>
-                  <p class="text-xs text-gray-500">Usuario Premium</p>
                 </div>
                 <div class="relative">
                   <button id="userMenuButton" class="flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -255,15 +172,7 @@ function showDashboard(user, appElement) {
                     <i class="fas fa-chevron-down text-gray-600"></i>
                   </button>
                   
-                  <!-- Dropdown menu -->
                   <div id="userMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                      <i class="fas fa-user mr-2"></i> Mi Perfil
-                    </a>
-                    <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                      <i class="fas fa-cog mr-2"></i> Configuración
-                    </a>
-                    <div class="border-t border-gray-100"></div>
                     <button id="logoutButton" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
                       <i class="fas fa-sign-out-alt mr-2"></i> Cerrar Sesión
                     </button>
@@ -275,148 +184,11 @@ function showDashboard(user, appElement) {
         </div>
       </nav>
 
-      <!-- Main Content -->
       <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div class="mb-8">
-          <h2 class="text-2xl font-bold text-gray-800">Bienvenido, ${
-            user.email.split("@")[0]
-          }</h2>
-          <p class="text-gray-600">Tu información está segura y cifrada</p>
-        </div>
-
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-              <div class="p-3 bg-blue-100 rounded-lg">
-                <i class="fas fa-shield-alt text-blue-600 text-xl"></i>
-              </div>
-              <div class="ml-4">
-                <p class="text-sm text-gray-500">Documentos Protegidos</p>
-                <p class="text-2xl font-bold text-gray-800">0</p>
-              </div>
-            </div>
-          </div>
-          
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-              <div class="p-3 bg-green-100 rounded-lg">
-                <i class="fas fa-key text-green-600 text-xl"></i>
-              </div>
-              <div class="ml-4">
-                <p class="text-sm text-gray-500">Cifrado Activo</p>
-                <p class="text-2xl font-bold text-gray-800">E2EE</p>
-              </div>
-            </div>
-          </div>
-          
-          <div class="bg-white rounded-lg shadow p-6">
-            <div class="flex items-center">
-              <div class="p-3 bg-purple-100 rounded-lg">
-                <i class="fas fa-user-shield text-purple-600 text-xl"></i>
-              </div>
-              <div class="ml-4">
-                <p class="text-sm text-gray-500">Sesión Activa</p>
-                <p class="text-2xl font-bold text-gray-800">Ahora</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="bg-white rounded-lg shadow p-6">
-            <h3 class="text-lg font-semibold text-gray-800 mb-4">Acciones Rápidas</h3>
-            <div class="space-y-3">
-              <button class="w-full flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition">
-                <div class="flex items-center">
-                  <i class="fas fa-plus-circle text-blue-600 mr-3"></i>
-                  <span class="font-medium">Agregar Nuevo Dato</span>
-                </div>
-                <i class="fas fa-chevron-right text-gray-400"></i>
-              </button>
-              <button class="w-full flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 rounded-lg transition">
-                <div class="flex items-center">
-                  <i class="fas fa-file-export text-green-600 mr-3"></i>
-                  <span class="font-medium">Crear Backup</span>
-                </div>
-                <i class="fas fa-chevron-right text-gray-400"></i>
-              </button>
-              <button id="initializeEncryptionBtn" class="w-full flex items-center justify-between p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition">
-                <div class="flex items-center">
-                  <i class="fas fa-shield-alt text-purple-600 mr-3"></i>
-                  <span class="font-medium">Activar Cifrado E2EE</span>
-                </div>
-                <i class="fas fa-chevron-right text-gray-400"></i>
-              </button>
-              <button id="manageTemplatesBtn" class="w-full flex items-center justify-between p-3 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition">
-                <div class="flex items-center">
-                  <i class="fas fa-layer-group text-indigo-600 mr-3"></i>
-                  <span class="font-medium">Gestionar Plantillas</span>
-                </div>
-                <i class="fas fa-chevron-right text-gray-400"></i>
-              </button>
-            </div>
-          </div>
-          
-          <div class="bg-white rounded-lg shadow p-6">
-            <h3 class="text-lg font-semibold text-gray-800 mb-4">Estado de Seguridad</h3>
-            <div class="space-y-4">
-              <div>
-                <div class="flex justify-between mb-1">
-                  <span class="text-sm font-medium text-gray-700">Fuerza de Cifrado</span>
-                  <span class="text-sm font-bold text-green-600">100%</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                  <div class="bg-green-600 h-2 rounded-full" style="width: 100%"></div>
-                </div>
-              </div>
-              <div class="flex items-center text-sm">
-                <i class="fas fa-check-circle text-green-500 mr-2"></i>
-                <span class="text-gray-600">Todos tus datos están cifrados localmente</span>
-              </div>
-              <div class="flex items-center text-sm">
-                <i class="fas fa-check-circle text-green-500 mr-2"></i>
-                <span class="text-gray-600">Ningún dato se transmite sin cifrar</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div id="dynamicContent"></div>
       </main>
     </div>
   `;
-
-  // Solo mostrar para desarrollo/testing
-  if (
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1"
-  ) {
-    /*
-    appElement.innerHTML += `
-      <div class="mt-12 max-w-7xl mx-auto px-4">
-        <div class="border-t border-gray-200 pt-8">
-          <h3 class="text-lg font-semibold text-gray-800 mb-4">
-            <i class="fas fa-flask mr-2"></i>
-            Pruebas de Desarrollo - Cifrado E2EE
-          </h3>
-          <div id="encryptionTestContainer"></div>
-        </div>
-      </div>
-    `;
-
-    // Inicializar prueba de cifrado
-    setTimeout(() => {
-      const encryptionTest = new EncryptionTest();
-      const container = document.getElementById("encryptionTestContainer");
-      if (container) {
-        container.innerHTML = encryptionTest.render();
-        encryptionTest.setupEventListeners();
-      }
-    }, 100);
-    // Inicializar servicio de plantillas con el usuario
-    templateService.initialize(user.uid);
-    */
-  }
 
   // Configurar event listeners del dashboard
   setupDashboardListeners();
@@ -426,13 +198,12 @@ function showDashboard(user, appElement) {
 }
 
 /**
- * Mostrar la vista de lista de la bóveda (NUEVA FUNCIÓN)
+ * Mostrar la vista de lista de la bóveda
  */
 function showVaultListView(user) {
-  const mainContainer = document.querySelector("main"); // O usa un ID específico si lo agregas
+  const mainContainer = document.querySelector("main");
   if (!mainContainer) return;
 
-  // Limpiar contenido actual del main
   mainContainer.innerHTML = `
     <div class="mb-6 flex justify-between items-center">
       <div>
@@ -443,36 +214,33 @@ function showVaultListView(user) {
         <i class="fas fa-plus mr-2"></i> Nuevo
       </button>
     </div>
-    
     <div id="vaultListContainer"></div>
   `;
 
-  // Inicializar componente
   const vaultList = new VaultList(
     (docId) => {
-      // CAMBIO AQUÍ: Llamar a la función real
       console.log("Abrir documento cifrado:", docId);
-      showDocumentDetails(docId, user); // <--- CONEXIÓN REALIZADA
+      showDocumentDetails(docId, user);
     },
     () => {
       showTemplateManager(user);
     }
   );
 
-  // Listener para el botón "Nuevo" de esta vista
   document.getElementById("btnNewDocVault")?.addEventListener("click", () => {
     showTemplateManager(user);
   });
 
-  // Cargar datos
   vaultList.loadDocuments();
 }
 
-// 3. NUEVA FUNCIÓN: Mostrar detalles del documento
+/**
+ * Mostrar detalles del documento (Lectura y Edición)
+ * CORREGIDO: Maneja el callback de edición
+ */
 async function showDocumentDetails(docId, user) {
   const appElement = document.getElementById("app");
 
-  // Estructura base
   appElement.innerHTML = `
     <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <div id="documentViewerPlaceholder"></div>
@@ -481,80 +249,88 @@ async function showDocumentDetails(docId, user) {
 
   const container = document.getElementById("documentViewerPlaceholder");
 
-  // Instanciar visor
-  const viewer = new DocumentViewer(docId, () => {
-    // Al volver, regresamos a la lista
-    showDashboard(user, appElement);
-    // Nota: showDashboard llama a showVaultListView por defecto según tu última config
+  const viewer = new DocumentViewer(docId, (actionData) => {
+    // 👇👇 CORRECCIÓN CRÍTICA AQUÍ 👇👇
+    // Si recibimos datos (actionData), significa que el usuario hizo clic en "Editar"
+    if (actionData) {
+      console.log("✏️ Modo edición activado");
+      openEditorForUpdate(actionData, user);
+    } else {
+      // Si es undefined/null, es solo "Volver"
+      console.log("🔙 Volviendo al listado");
+      showDashboard(user, appElement);
+    }
   });
 
-  // Renderizar contenedor y cargar datos
   container.innerHTML = viewer.render();
-  await viewer.load(); // Iniciar proceso de carga y descifrado
+  await viewer.load();
 }
 
 /**
- * Configurar listeners del dashboard
+ * Mostrar editor de documentos (Creación)
  */
-function setupDashboardListeners() {
-  // Menú de usuario
-  const userMenuButton = document.getElementById("userMenuButton");
-  const userMenu = document.getElementById("userMenu");
-  const logoutButton = document.getElementById("logoutButton");
+async function showDocumentEditor(templateId, user) {
+  const appElement = document.getElementById("app");
 
-  if (userMenuButton && userMenu) {
-    userMenuButton.addEventListener("click", (e) => {
-      e.stopPropagation();
-      userMenu.classList.toggle("hidden");
-    });
+  appElement.innerHTML = `
+    <div class="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+    </div>`;
 
-    // Cerrar menú al hacer clic fuera
-    document.addEventListener("click", () => {
-      userMenu.classList.add("hidden");
-    });
+  try {
+    const template = await templateService.getTemplateById(templateId);
 
-    userMenu.addEventListener("click", (e) => {
-      e.stopPropagation();
-    });
-  }
-
-  if (logoutButton) {
-    logoutButton.addEventListener("click", async () => {
-      try {
-        await authService.logout();
-      } catch (error) {
-        console.error("Error al cerrar sesión:", error);
-        alert("Error al cerrar sesión. Intenta nuevamente.");
+    const editor = new DocumentEditor(
+      { template: template },
+      () => {
+        showDashboard(user, appElement);
+      },
+      () => {
+        showTemplateManager(user);
       }
-    });
-  }
-  const initEncryptionBtn = document.getElementById("initializeEncryptionBtn");
-  if (initEncryptionBtn) {
-    initEncryptionBtn.addEventListener("click", async () => {
-      const user = authService.getCurrentUser();
-      if (user) {
-        await checkAndInitializeEncryption(user);
-      }
-    });
-  }
-  const manageTemplatesBtn = document.getElementById("manageTemplatesBtn");
-  if (manageTemplatesBtn) {
-    manageTemplatesBtn.addEventListener("click", () => {
-      const user = authService.getCurrentUser();
-      showTemplateManager(user);
-    });
-  }
+    );
 
-  // Listener para navegación "Mis Datos"
-  // Nota: Debes agregar id="navMyData" al enlace en el HTML del dashboard
-  const navMyData = document.querySelector('a[href="#mis-datos"]'); // O agregale ID
-  if (navMyData) {
-    navMyData.addEventListener("click", (e) => {
-      e.preventDefault();
-      const user = authService.getCurrentUser();
-      showVaultListView(user);
-    });
+    appElement.innerHTML = `
+      <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+        <div id="editorContainer"></div>
+      </div>
+    `;
+
+    document.getElementById("editorContainer").innerHTML = editor.render();
+    editor.setupEventListeners();
+  } catch (error) {
+    console.error("Error cargando editor:", error);
+    alert("Error al cargar la plantilla: " + error.message);
+    showTemplateManager(user);
   }
+}
+
+/**
+ * Función auxiliar para abrir el editor en modo Edición
+ */
+function openEditorForUpdate(initialData, user) {
+  const appElement = document.getElementById("app");
+
+  const editor = new DocumentEditor(
+    initialData,
+    () => {
+      // Al guardar, volvemos a ver el documento actualizado
+      showDocumentDetails(initialData.documentId, user);
+    },
+    () => {
+      // Al cancelar, volvemos al visor del documento
+      showDocumentDetails(initialData.documentId, user);
+    }
+  );
+
+  appElement.innerHTML = `
+    <div class="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div id="editorContainer"></div>
+    </div>
+  `;
+
+  document.getElementById("editorContainer").innerHTML = editor.render();
+  editor.setupEventListeners();
 }
 
 /**
@@ -565,17 +341,12 @@ function showTemplateManager(user) {
   if (!appElement) return;
 
   const templateManager = new TemplateManager((templateId) => {
-    // Cuando se selecciona una plantilla
-    console.log("Plantilla seleccionada:", templateId);
-    // Aquí podrías redirigir a crear un nuevo documento con esta plantilla
-    // CAMBIO AQUÍ: Llamar al editor real en lugar del alert
     console.log("Plantilla seleccionada:", templateId);
     showDocumentEditor(templateId, user);
   });
 
   appElement.innerHTML = `
     <div class="min-h-screen bg-gray-50">
-      <!-- Navbar -->
       <nav class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between h-16">
@@ -591,15 +362,12 @@ function showTemplateManager(user) {
           </div>
         </div>
       </nav>
-      
-      <!-- Contenido principal -->
       <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div id="templateManagerContainer"></div>
       </main>
     </div>
   `;
 
-  // Cargar gestor de plantillas
   const container = document.getElementById("templateManagerContainer");
   if (container) {
     container.innerHTML = templateManager.render();
@@ -607,7 +375,6 @@ function showTemplateManager(user) {
     templateManager.loadTemplates();
   }
 
-  // Botón para volver al dashboard
   document.getElementById("backToDashboard")?.addEventListener("click", () => {
     const user = authService.getCurrentUser();
     if (user) {
@@ -616,24 +383,56 @@ function showTemplateManager(user) {
   });
 }
 
-// Nueva función para el flujo de login exitoso
-async function initializePostLogin(user, password) {
-  // Inicializa el servicio de cifrado con la contraseña recién ingresada.
-  await encryptionService.initialize(password, user.uid);
+/**
+ * Configurar listeners del dashboard
+ */
+function setupDashboardListeners() {
+  const userMenuButton = document.getElementById("userMenuButton");
+  const userMenu = document.getElementById("userMenu");
+  const logoutButton = document.getElementById("logoutButton");
 
-  // El onAuthStateChanged de Firebase se disparará,
-  // pero encontrará que encryptionService.isReady() es true,
-  // por lo que saltará el PasswordPrompt.
+  if (userMenuButton && userMenu) {
+    userMenuButton.addEventListener("click", (e) => {
+      e.stopPropagation();
+      userMenu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", () => userMenu.classList.add("hidden"));
+    userMenu.addEventListener("click", (e) => e.stopPropagation());
+  }
+
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      try {
+        await authService.logout();
+      } catch (error) {
+        console.error("Error al cerrar sesión:", error);
+      }
+    });
+  }
+
+  // Navegación
+  document.getElementById("navMyData")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const user = authService.getCurrentUser();
+    showVaultListView(user);
+  });
+
+  document.getElementById("navHome")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const user = authService.getCurrentUser();
+    showVaultListView(user); // Por defecto el home muestra la bóveda
+  });
 }
 
-// Exportar función init para uso externo (mantener este nombre)
+// Nueva función para el flujo de login exitoso
+async function initializePostLogin(user, password) {
+  await encryptionService.initialize(password, user.uid);
+}
+
 export function initApp() {
-  console.log("Aplicación inicializada desde export");
-  // Llamar a la función interna
   initializeApplication();
 }
 
 window.app = {
-  // ... otras funciones
-  initializePostLogin, // <-- Asegúrate de exportar esto
+  initializePostLogin,
 };
