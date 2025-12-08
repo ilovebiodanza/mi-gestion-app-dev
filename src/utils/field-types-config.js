@@ -66,8 +66,8 @@ const FIELD_TYPES = [
   },
   {
     value: "secret",
-    label: "Contraseña (Oculto)",
-    inputType: "password",
+    label: "Contraseña / Secreto",
+    inputType: "password", // Esto hace que al escribir se vean asteriscos automáticamente
   },
 ];
 

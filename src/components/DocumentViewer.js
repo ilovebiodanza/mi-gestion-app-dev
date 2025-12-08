@@ -133,6 +133,20 @@ export class DocumentViewer {
               <i class="fas fa-copy"></i>
             </button>
           </div>`;
+        } else if (field.type === "secret") {
+          // Lógica de Ver/Ocultar
+          displayValue = `
+          <div class="flex items-center gap-2">
+            <span class="font-mono bg-gray-100 px-2 py-1 rounded secret-mask" data-value="${value}">••••••••</span>
+            
+            <button type="button" class="toggle-secret-btn text-gray-500 hover:text-blue-600 transition focus:outline-none" title="Ver/Ocultar">
+              <i class="fas fa-eye"></i>
+            </button>
+            
+            <button type="button" class="copy-btn text-gray-400 hover:text-green-600 transition" data-value="${value}" title="Copiar">
+               <i class="fas fa-copy"></i>
+            </button>
+          </div>`;
         } else if (field.type === "url") {
           displayValue = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline flex items-center"><i class="fas fa-external-link-alt mr-1 text-xs"></i> ${value}</a>`;
         } else {
@@ -355,6 +369,36 @@ export class DocumentViewer {
     document
       .getElementById("whatsappDocBtn")
       ?.addEventListener("click", () => this.handleCopyToWhatsApp());
+    const viewerContainer = document.getElementById(
+      "documentViewerPlaceholder"
+    );
+
+    viewerContainer.querySelectorAll(".toggle-secret-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        // Encontrar el span hermano y el icono dentro del botón
+        const button = e.currentTarget;
+        const span = button.parentElement.querySelector(".secret-mask");
+        const icon = button.querySelector("i");
+
+        // Obtener el valor real
+        const realValue = span.dataset.value;
+        const isHidden = span.textContent === "••••••••";
+
+        if (isHidden) {
+          // MOSTRAR: Ponemos el valor real y cambiamos icono a "ojo tachado"
+          span.textContent = realValue;
+          icon.classList.remove("fa-eye");
+          icon.classList.add("fa-eye-slash");
+          span.classList.add("text-blue-700", "font-bold"); // Resaltar que está visible
+        } else {
+          // OCULTAR: Volvemos a poner puntos y el icono de "ojo"
+          span.textContent = "••••••••";
+          icon.classList.remove("fa-eye-slash");
+          icon.classList.add("fa-eye");
+          span.classList.remove("text-blue-700", "font-bold");
+        }
+      });
+    });
 
     document.querySelectorAll(".copy-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
