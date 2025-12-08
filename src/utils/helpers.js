@@ -5,6 +5,7 @@ import { getFieldTypeMetadata } from "./field-types-config.js"; // NUEVO IMPORT
 /**
  * Mapa de configuración regional para monedas
  */
+// ... (El mapa idiomasYMonedas se queda igual, o puedes agregar más si quieres)
 export const idiomasYMonedas = {
   "es-VE": { moneda: "Bolívar", codigo: "VES" },
   "es-ES": { moneda: "Euro", codigo: "EUR" },
@@ -12,26 +13,35 @@ export const idiomasYMonedas = {
   "en-GB": { moneda: "Libra esterlina", codigo: "GBP" },
   "fr-FR": { moneda: "Euro", codigo: "EUR" },
   "pt-BR": { moneda: "Real brasileño", codigo: "BRL" },
+  // Agregamos genéricos y Latam
+  es: { moneda: "Dólar estadounidense", codigo: "USD" }, // Default español genérico
+  "es-419": { moneda: "Dólar estadounidense", codigo: "USD" }, // Latinoamérica (generalmente usa USD en web)
+  "es-AR": { moneda: "Peso argentino", codigo: "ARS" },
+  "es-CO": { moneda: "Peso colombiano", codigo: "COP" },
+  "es-MX": { moneda: "Peso mexicano", codigo: "MXN" },
 };
 
 /**
- * Obtiene la configuración de moneda basada en el navegador del usuario
+ * Obtiene la configuración de moneda de forma robusta
  */
 export const getLocalCurrency = () => {
-  // 1. Detectar idioma del navegador (ej: "es-ES", "en-US")
-  const browserLang = navigator.language;
-  console.log(`🧏 Lenguaje del navegador: ${browserLang}`);
+  const browserLang = navigator.language; // Ej: "es-VE", "es", "en-US"
+  console.log("🌎 Idioma detectado:", browserLang);
 
-  // 2. Buscar en el mapa
-  const config = idiomasYMonedas[browserLang];
-
-  // 3. Retornar configuración encontrada o Default (USD)
-  if (config) {
-    return { locale: browserLang, ...config };
-  } else {
-    // Fallback: Si el idioma no está en la lista (ej: es-MX), usamos USD por defecto
-    return { locale: "en-US", ...idiomasYMonedas["en-US"] };
+  // 1. Busqueda exacta (Ej: "es-VE")
+  if (idiomasYMonedas[browserLang]) {
+    return { locale: browserLang, ...idiomasYMonedas[browserLang] };
   }
+
+  // 2. Busqueda parcial (Ej: Si el navegador dice "es-VE" pero solo tenemos "es")
+  // O viceversa, si dice "es-XY" y queremos caer en un default de español
+  const langPrefix = browserLang.split("-")[0]; // "es"
+  if (idiomasYMonedas[langPrefix]) {
+    return { locale: langPrefix, ...idiomasYMonedas[langPrefix] };
+  }
+
+  // 3. Fallback final (Inglés/USD)
+  return { locale: "en-US", ...idiomasYMonedas["en-US"] };
 };
 
 /**

@@ -3,7 +3,6 @@
 import { documentService } from "../services/documents/index.js";
 import { templateService } from "../services/templates/index.js";
 import { encryptionService } from "../services/encryption/index.js";
-// 👇 IMPORTAR LA NUEVA FUNCIÓN 👇
 import { getFieldTypeLabel, getLocalCurrency } from "../utils/helpers.js";
 
 export class DocumentViewer {
@@ -18,10 +17,7 @@ export class DocumentViewer {
   async load() {
     this.renderLoading();
     try {
-      // 1. Cargar el documento cifrado desde Firestore
       this.document = await documentService.getDocumentById(this.docId);
-
-      // 2. Cargar la plantilla asociada
       this.template = await templateService.getTemplateById(
         this.document.templateId
       );
@@ -30,20 +26,17 @@ export class DocumentViewer {
         throw new Error("La plantilla asociada a este documento ya no existe.");
       }
 
-      // 3. Verificar estado del cifrado
       if (!encryptionService.isReady()) {
         throw new Error(
           "El servicio de cifrado no está listo. Por favor, ingresa tu contraseña."
         );
       }
 
-      // 4. Descifrar contenido
       this.decryptedData = await encryptionService.decryptDocument({
         content: this.document.encryptedContent,
         metadata: this.document.encryptionMetadata,
       });
 
-      // 5. Renderizar
       this.renderContent();
     } catch (error) {
       console.error("Error al cargar documento:", error);
@@ -87,13 +80,14 @@ export class DocumentViewer {
     if (!container) return;
 
     const date = new Date(this.document.metadata.updatedAt).toLocaleString();
-
-    // 👇 OBTENER CONFIGURACIÓN DE MONEDA LOCAL 👇
     const currencyConfig = getLocalCurrency();
 
     // Generar HTML de los campos
     const fieldsHtml = this.template.fields
-      .map((field) => {
+      .map((field, index) => {
+        // Saltar el primer campo (índice 0)
+        if (index === 0) return "";
+
         const value = this.decryptedData[field.id];
         const label = field.label;
 
@@ -105,12 +99,26 @@ export class DocumentViewer {
           (typeof value === "string" && value.length === 0)
         ) {
           displayValue = '<span class="text-gray-400 italic">Sin datos</span>';
+        } else if (field.type === "date" && value) {
+          // NUEVO: Formato de fecha amigable (ej: 15 dic 2023)
+          try {
+            // Dividir manualmente para evitar problemas de zona horaria (UTC vs Local)
+            const [year, month, day] = value.split("-").map(Number);
+            const dateObj = new Date(year, month - 1, day);
+
+            displayValue = new Intl.DateTimeFormat(currencyConfig.locale, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            }).format(dateObj);
+          } catch (e) {
+            displayValue = value; // Fallback si falla el formato
+          }
         } else if (field.type === "boolean") {
           displayValue = value
             ? '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">Sí</span>'
             : '<span class="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm">No</span>';
         } else if (field.type === "currency" && typeof value === "number") {
-          // 👇 USO DE LA MONEDA DINÁMICA 👇
           displayValue = new Intl.NumberFormat(currencyConfig.locale, {
             style: "currency",
             currency: currencyConfig.codigo,
@@ -135,6 +143,12 @@ export class DocumentViewer {
           displayValue = String(value);
         }
 
+        // Estilo para texto largo
+        const isLongText = field.type === "text";
+        const ddClass = isLongText
+          ? "mt-2 whitespace-pre-wrap text-gray-800 bg-gray-50 p-3 rounded-md border border-gray-100 text-sm font-normal"
+          : "text-gray-900 font-medium break-words";
+
         return `
         <div class="border-b border-gray-100 last:border-0 py-4">
           <dt class="text-sm font-medium text-gray-500 mb-1 flex items-center">
@@ -145,14 +159,15 @@ export class DocumentViewer {
                 : ""
             }
           </dt>
-          <dd class="text-gray-900 font-medium break-words">${displayValue}</dd>
+          <dd class="${ddClass}">${displayValue}</dd>
         </div>
       `;
       })
       .join("");
 
     container.innerHTML = `
-      <div class="bg-white rounded-xl shadow-lg overflow-hidden animate-fade-in max-w-3xl mx-auto">
+      <div id="documentCard" class="bg-white rounded-xl shadow-lg overflow-hidden animate-fade-in max-w-3xl mx-auto">
+        
         <div class="px-6 py-5 border-b border-gray-200 bg-gray-50 flex justify-between items-start">
           <div class="flex items-center">
             <div class="w-12 h-12 rounded-lg flex items-center justify-center text-2xl mr-4 shadow-sm" 
@@ -166,13 +181,13 @@ export class DocumentViewer {
               </p>
             </div>
           </div>
-          <button id="closeViewerBtn" class="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition">
+          <button id="closeViewerBtn" class="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-200 transition no-print">
             <i class="fas fa-times text-xl"></i>
           </button>
         </div>
 
         <div class="p-6">
-          <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-6 flex items-center text-sm text-green-800">
+          <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-6 flex items-center text-sm text-green-800 no-print">
             <i class="fas fa-check-circle mr-2 text-green-600"></i>
             Datos descifrados exitosamente en tu dispositivo.
           </div>
@@ -182,18 +197,25 @@ export class DocumentViewer {
           </dl>
         </div>
 
-        <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between">
+        <div class="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between no-print-section">
           <button id="backBtn" class="text-gray-600 hover:text-gray-900 font-medium px-4 py-2 rounded hover:bg-gray-200 transition">
             <i class="fas fa-arrow-left mr-2"></i> Volver
           </button>
           
-          <div class="space-x-3">
-            <button id="deleteDocBtn" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition shadow-sm">
-                <i class="fas fa-trash mr-2"></i> Eliminar
+          <div class="space-x-2 flex">
+            <button id="whatsappDocBtn" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded transition shadow-sm flex items-center" title="Copiar para WhatsApp">
+                <i class="fab fa-whatsapp mr-2"></i> <span class="hidden sm:inline">WhatsApp</span>
             </button>
-            
-            <button id="editDocBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition shadow-sm">
-                <i class="fas fa-edit mr-2"></i> Editar
+
+            <button id="pdfDocBtn" class="bg-gray-800 hover:bg-gray-900 text-white px-3 py-2 rounded transition shadow-sm flex items-center" title="Guardar PDF">
+                <i class="fas fa-file-pdf mr-2"></i> <span class="hidden sm:inline">PDF</span>
+            </button>
+
+            <button id="deleteDocBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition shadow-sm" title="Eliminar">
+                <i class="fas fa-trash"></i>
+            </button>
+            <button id="editDocBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition shadow-sm" title="Editar">
+                <i class="fas fa-edit"></i>
             </button>
           </div>
         </div>
@@ -203,38 +225,80 @@ export class DocumentViewer {
     this.setupContentListeners();
   }
 
-  setupContentListeners() {
-    document
-      .getElementById("closeViewerBtn")
-      ?.addEventListener("click", () => this.onBack());
-    document
-      .getElementById("backBtn")
-      ?.addEventListener("click", () => this.onBack());
+  // Generar texto para WhatsApp (Formateado)
+  async handleCopyToWhatsApp() {
+    try {
+      const currencyConfig = getLocalCurrency();
 
-    // Manejar eliminación
-    document
-      .getElementById("deleteDocBtn")
-      ?.addEventListener("click", () => this.handleDelete());
+      let waText = `*${this.document.metadata.title}*\n_${this.template.name}_\n\n`;
 
-    // NUEVO: Manejar edición
-    document
-      .getElementById("editDocBtn")
-      ?.addEventListener("click", () => this.handleEdit());
+      this.template.fields.forEach((field, index) => {
+        if (index === 0) return; // Saltar el primer campo
 
-    // Funcionalidad de copiar
-    document.querySelectorAll(".copy-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const value = btn.dataset.value;
-        navigator.clipboard.writeText(value).then(() => {
-          const originalHTML = btn.innerHTML;
-          btn.innerHTML = '<i class="fas fa-check text-green-600"></i>';
-          setTimeout(() => (btn.innerHTML = originalHTML), 2000);
-        });
+        const label = `*${field.label}:*`;
+        let value = this.decryptedData[field.id];
+
+        if (value === undefined || value === null || value === "") {
+          value = "_N/A_";
+        } else if (field.type === "date" && value) {
+          // NUEVO: Formato fecha en WhatsApp
+          try {
+            const [year, month, day] = value.split("-").map(Number);
+            const dateObj = new Date(year, month - 1, day);
+            value = new Intl.DateTimeFormat(currencyConfig.locale, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            }).format(dateObj);
+          } catch (e) {}
+        } else if (field.type === "boolean") {
+          value = value ? "Sí" : "No";
+        } else if (field.type === "secret") {
+          value = `\`\`\`${value}\`\`\``;
+        } else if (field.type === "currency" && typeof value === "number") {
+          value = new Intl.NumberFormat(currencyConfig.locale, {
+            style: "currency",
+            currency: currencyConfig.codigo,
+          }).format(value);
+        } else if (field.type === "percentage") {
+          value = `${value}%`;
+        }
+
+        if (field.type === "text") {
+          waText += `${label}\n${value}\n\n`;
+        } else {
+          waText += `${label} ${value}\n`;
+        }
       });
-    });
+
+      waText += `\n_Generado por Mi Gestión_`;
+
+      await navigator.clipboard.writeText(waText);
+
+      const btn = document.getElementById("whatsappDocBtn");
+      const originalHTML = btn.innerHTML;
+      const originalClasses = btn.className;
+
+      btn.innerHTML = '<i class="fas fa-check mr-2"></i> Copiado';
+      btn.className =
+        "bg-green-700 text-white px-3 py-2 rounded transition shadow-sm flex items-center";
+
+      setTimeout(() => {
+        btn.innerHTML = originalHTML;
+        btn.className = originalClasses;
+      }, 2000);
+    } catch (err) {
+      console.error("Error al copiar para WhatsApp:", err);
+      alert(
+        "No se pudo copiar al portapapeles. Verifica los permisos de tu navegador."
+      );
+    }
   }
 
-  // Lógica para enviar los datos de edición al router (app.js)
+  handleExportPDF() {
+    window.print();
+  }
+
   handleEdit() {
     const editData = {
       documentId: this.docId,
@@ -242,7 +306,6 @@ export class DocumentViewer {
       formData: this.decryptedData,
       metadata: this.document.metadata,
     };
-    // Llamamos al callback pasando los datos necesarios para abrir el editor
     this.onBack(editData);
   }
 
@@ -257,22 +320,52 @@ export class DocumentViewer {
 
     try {
       const btn = document.getElementById("deleteDocBtn");
-      btn.innerHTML =
-        '<i class="fas fa-spinner fa-spin mr-2"></i> Eliminando...';
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
       btn.disabled = true;
 
       await documentService.deleteDocument(this.docId);
 
       alert("🗑️ Documento eliminado permanentemente de la bóveda.");
-      // Llamamos a onBack sin argumentos para volver a la lista
       this.onBack();
     } catch (error) {
       console.error("Error al eliminar documento:", error);
       alert("Error al eliminar: " + error.message);
       document.getElementById("deleteDocBtn").disabled = false;
       document.getElementById("deleteDocBtn").innerHTML =
-        '<i class="fas fa-trash mr-2"></i> Eliminar';
+        '<i class="fas fa-trash"></i>';
     }
+  }
+
+  setupContentListeners() {
+    document
+      .getElementById("closeViewerBtn")
+      ?.addEventListener("click", () => this.onBack());
+    document
+      .getElementById("backBtn")
+      ?.addEventListener("click", () => this.onBack());
+    document
+      .getElementById("deleteDocBtn")
+      ?.addEventListener("click", () => this.handleDelete());
+    document
+      .getElementById("editDocBtn")
+      ?.addEventListener("click", () => this.handleEdit());
+    document
+      .getElementById("pdfDocBtn")
+      ?.addEventListener("click", () => this.handleExportPDF());
+    document
+      .getElementById("whatsappDocBtn")
+      ?.addEventListener("click", () => this.handleCopyToWhatsApp());
+
+    document.querySelectorAll(".copy-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const value = btn.dataset.value;
+        navigator.clipboard.writeText(value).then(() => {
+          const originalHTML = btn.innerHTML;
+          btn.innerHTML = '<i class="fas fa-check text-green-600"></i>';
+          setTimeout(() => (btn.innerHTML = originalHTML), 2000);
+        });
+      });
+    });
   }
 
   render() {

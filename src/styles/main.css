@@ -227,3 +227,51 @@ button:disabled {
     grid-column: span 2;
   }
 }
+
+/* --- ESTILOS DE IMPRESIÓN (PDF) --- */
+@media print {
+  /* 1. Ocultar todo por defecto */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 2. Ocultar elementos específicos que puedan molestar */
+  nav,
+  #userMenuButton,
+  .no-print,
+  .no-print-section,
+  button {
+    display: none !important;
+  }
+
+  /* 3. Hacer visible SOLO la tarjeta del documento y sus hijos */
+  #documentCard,
+  #documentCard * {
+    visibility: visible;
+  }
+
+  /* 4. Posicionar la tarjeta para que ocupe la hoja */
+  #documentCard {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: none; /* Quitar bordes para que parezca documento nativo */
+    box-shadow: none; /* Quitar sombras */
+  }
+
+  /* 5. Ajustes de tipografía para papel */
+  body {
+    background-color: white;
+    font-size: 12pt;
+    color: black; /* Forzar negro puro para máxima nitidez */
+  }
+
+  /* Asegurar que los colores de fondo (ej: etiquetas verdes) se impriman */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
