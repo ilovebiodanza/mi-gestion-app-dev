@@ -5,8 +5,6 @@ import { documentService } from "../services/documents/index.js";
 
 export class DocumentEditor {
   constructor(initialData, onSaveSuccess, onCancel) {
-    // initialData puede ser: { template: T } (Creación) o
-    // { documentId: ID, template: T, formData: F, metadata: M } (Edición)
     this.initialData = initialData;
     this.onSaveSuccess = onSaveSuccess;
     this.onCancel = onCancel;
@@ -14,31 +12,23 @@ export class DocumentEditor {
     this.isEditing = !!initialData.documentId;
     this.documentId = initialData.documentId || null;
 
-    // Si la data viene pre-cargada (desde DocumentViewer), la usamos directamente.
     this.template = initialData.template || null;
     this.initialFormData = initialData.formData || {};
     this.documentMetadata = initialData.metadata || {};
 
     this.isSubmitting = false;
 
-    // Si estamos editando y solo tenemos el ID (ej: acceso futuro directo),
-    // necesitamos cargar los datos. Sin embargo, para este flujo, asumimos
-    // que app.js siempre precarga los datos. Dejamos el load en el constructor
-    // para robustez en caso de que la plantilla no esté precargada.
     if (this.isEditing && !this.template) {
       this.loadExistingDocument();
     }
   }
 
-  // Si no se precargaron los datos descifrados (flujo de emergencia/futuro)
   async loadExistingDocument() {
     this.updateEditorState(true, "Cargando datos...");
     try {
       const loadedData = await documentService.loadDocumentForEditing(
         this.documentId
       );
-
-      // Asignar datos cargados
       this.template = loadedData.template;
       this.initialFormData = loadedData.formData;
       this.documentMetadata = loadedData.metadata;
@@ -54,7 +44,6 @@ export class DocumentEditor {
 
   render() {
     if (!this.template && this.isEditing) {
-      // Muestra spinner inicial mientras loadExistingDocument trabaja
       return `<div id="editorContainer" class="max-w-3xl mx-auto py-8">
             <div class="flex justify-center items-center">
                 <i class="fas fa-spinner fa-spin text-2xl text-blue-600"></i>
@@ -136,9 +125,76 @@ export class DocumentEditor {
     document
       .getElementById("saveDocBtn")
       ?.addEventListener("click", () => this.handleSave());
+
+    // Inicializar cálculos matemáticos y tablas
+    this.setupMathCalculations();
+    this.setupTableInteractivity();
   }
 
-  // Maneja Creación y Edición
+  // --- LÓGICA MATEMÁTICA ---
+  setupMathCalculations() {
+    // Identificar campos numéricos en la plantilla
+    const numericFields = this.template.fields.filter((f) =>
+      ["number", "currency", "percentage"].includes(f.type)
+    );
+
+    numericFields.forEach((field) => {
+      const input = document.getElementById(field.id);
+      if (!input) return;
+
+      // Ayuda visual: Placeholder especial si está vacío
+      if (!input.value) {
+        input.placeholder = "Escribe un valor o fórmula (ej: 100+20)";
+      }
+
+      // Listener: Al presionar teclas
+      input.addEventListener("keydown", (e) => {
+        // Si presiona ENTER o IGUAL (=)
+        if (e.key === "Enter" || e.key === "=") {
+          e.preventDefault(); // Evitar submit del form o escribir el =
+          this.evaluateMathInput(input);
+        }
+      });
+
+      // Listener: Al salir del campo (Blur)
+      input.addEventListener("blur", () => {
+        this.evaluateMathInput(input);
+      });
+    });
+  }
+
+  evaluateMathInput(input) {
+    const value = input.value.trim();
+    if (!value) return;
+
+    // Solo evaluar si parece una operación matemática (tiene operadores)
+    // Permitimos: números, +, -, *, /, (, ), ., y espacios
+    if (/^[\d\s\.\+\-\*\/\(\)]+$/.test(value) && /[\+\-\*\/]/.test(value)) {
+      try {
+        // Evaluamos de forma segura (sin eval directo)
+        // "use strict" previene acceso a globales
+        const result = new Function('"use strict";return (' + value + ")")();
+
+        if (isFinite(result)) {
+          // Redondear a 2 decimales si es necesario para limpieza
+          // Pero mantenemos precisión si es entero
+          input.value = Math.round(result * 100) / 100;
+
+          // Feedback visual breve (flash verde)
+          input.classList.add("bg-green-50", "text-green-700");
+          setTimeout(
+            () => input.classList.remove("bg-green-50", "text-green-700"),
+            500
+          );
+        }
+      } catch (e) {
+        // Si la fórmula está mal (ej: "200+"), no hacemos nada, dejamos que el usuario corrija
+        console.warn("Fórmula inválida:", value);
+      }
+    }
+  }
+  // -------------------------
+
   async handleSave() {
     if (this.isSubmitting) return;
 
@@ -154,18 +210,25 @@ export class DocumentEditor {
     );
 
     try {
-      const formData = this.collectFormData(form);
+      // Forzar evaluación matemática de todos los campos antes de guardar
+      // por si el usuario dio clic en Guardar sin salir del último campo
+      this.template.fields.forEach((f) => {
+        if (["number", "currency", "percentage"].includes(f.type)) {
+          const inp = document.getElementById(f.id);
+          if (inp) this.evaluateMathInput(inp);
+        }
+      });
+
+      const formData = this.collectFormData();
 
       let result;
       if (this.isEditing) {
-        // Llama a la función de ACTUALIZACIÓN (sobrescribir)
         result = await documentService.updateDocument(
           this.documentId,
           this.template,
           formData
         );
       } else {
-        // Llama a la función de CREACIÓN
         result = await documentService.createDocument(this.template, formData);
       }
 
@@ -177,11 +240,29 @@ export class DocumentEditor {
     }
   }
 
-  // Auxiliar para extraer los datos del formulario
-  collectFormData(form) {
+  // src/components/DocumentEditor.js -> collectFormData
+
+  collectFormData() {
     const formData = {};
+
     this.template.fields.forEach((field) => {
+      // --- MANEJO ESPECIAL PARA URL (Doble Input) ---
+      if (field.type === "url") {
+        const urlInput = document.getElementById(`${field.id}_url`);
+        const textInput = document.getElementById(`${field.id}_text`);
+
+        if (urlInput) {
+          formData[field.id] = {
+            url: urlInput.value,
+            text: textInput.value || "", // Si está vacío, guardamos cadena vacía
+          };
+        }
+        return; // Saltamos al siguiente campo
+      }
+      // ----------------------------------------------
+
       const input = document.getElementById(field.id);
+
       if (input) {
         if (field.type === "boolean") {
           formData[field.id] = input.checked;
@@ -190,16 +271,96 @@ export class DocumentEditor {
           field.type === "currency" ||
           field.type === "percentage"
         ) {
-          formData[field.id] = Number(input.value);
+          // Evaluar fórmulas matemáticas pendientes
+          let val = input.value;
+          try {
+            if (/[\+\-\*\/]/.test(val)) {
+              val = new Function('"use strict";return (' + val + ")")();
+            }
+          } catch (e) {}
+          formData[field.id] = val === "" || isNaN(val) ? null : Number(val);
+        } else if (field.type === "table") {
+          try {
+            formData[field.id] = JSON.parse(input.value || "[]");
+          } catch (e) {
+            formData[field.id] = [];
+          }
         } else {
           formData[field.id] = input.value;
         }
       }
     });
+
     return formData;
   }
 
-  // Auxiliar para manejar el estado visual del botón
+  setupTableInteractivity() {
+    const containers = document.querySelectorAll(".table-input-container");
+
+    containers.forEach((container) => {
+      const fieldId = container.dataset.fieldId;
+      const hiddenInput = container.querySelector(`#${fieldId}`);
+      const tbody = container.querySelector(".table-body");
+      const addBtn = container.querySelector(".add-row-btn");
+      const columnsDef = JSON.parse(container.nextElementSibling.textContent);
+
+      const renderRow = (rowData = {}) => {
+        const tr = document.createElement("tr");
+        let tds = "";
+
+        columnsDef.forEach((col) => {
+          const val = rowData[col.id] || "";
+          tds += `
+                    <td class="px-2 py-2">
+                        <input type="${
+                          col.type === "number" || col.type === "currency"
+                            ? "number"
+                            : "text"
+                        }" 
+                               class="w-full text-sm border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 cell-input"
+                               data-col-id="${col.id}"
+                               value="${val}">
+                    </td>`;
+        });
+
+        tds += `<td class="px-2 py-2 text-center">
+                <button type="button" class="text-red-400 hover:text-red-600 remove-row-btn"><i class="fas fa-trash"></i></button>
+            </td>`;
+
+        tr.innerHTML = tds;
+        tbody.appendChild(tr);
+      };
+
+      const initialData = JSON.parse(hiddenInput.value || "[]");
+      initialData.forEach((row) => renderRow(row));
+
+      addBtn.addEventListener("click", () => renderRow({}));
+
+      tbody.addEventListener("click", (e) => {
+        if (e.target.closest(".remove-row-btn")) {
+          e.target.closest("tr").remove();
+          updateHiddenInput();
+        }
+      });
+
+      tbody.addEventListener("input", () => updateHiddenInput());
+
+      const updateHiddenInput = () => {
+        const rows = [];
+        tbody.querySelectorAll("tr").forEach((tr) => {
+          const rowObj = {};
+          tr.querySelectorAll(".cell-input").forEach((input) => {
+            let val = input.value;
+            if (input.type === "number") val = parseFloat(val) || 0;
+            rowObj[input.dataset.colId] = val;
+          });
+          rows.push(rowObj);
+        });
+        hiddenInput.value = JSON.stringify(rows);
+      };
+    });
+  }
+
   updateEditorState(isLoading, message = null) {
     this.isSubmitting = isLoading;
     const btn = document.getElementById("saveDocBtn");
@@ -221,7 +382,6 @@ export class DocumentEditor {
       btn.classList.remove("opacity-75", "cursor-not-allowed");
     }
 
-    // Deshabilitar/habilitar todos los inputs del formulario
     const inputs = document.querySelectorAll(
       "#dynamicFormContainer input, #dynamicFormContainer textarea, #dynamicFormContainer select"
     );

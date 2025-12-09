@@ -23,7 +23,7 @@ export class TemplateManager {
     return `
       <div class="bg-white rounded-xl shadow-lg overflow-hidden">
         <div class="border-b border-gray-200 px-6 py-4">
-          <div class="flex justify-between items-center">
+          <div class="flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
               <h2 class="text-xl font-bold text-gray-800">
                 <i class="fas fa-layer-group mr-2"></i>
@@ -33,10 +33,20 @@ export class TemplateManager {
                 Crea y gestiona plantillas para organizar tu información
               </p>
             </div>
-            <button id="btnNewTemplate" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center">
-              <i class="fas fa-plus mr-2"></i>
-              Nueva Plantilla
-            </button>
+            
+            <div class="flex space-x-2">
+              <input type="file" id="importTemplateInput" accept=".json" class="hidden" />
+              
+              <button id="btnImportTemplate" class="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium py-2 px-4 rounded-lg transition flex items-center shadow-sm">
+                <i class="fas fa-file-import mr-2"></i>
+                Importar
+              </button>
+              
+              <button id="btnNewTemplate" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center shadow-sm">
+                <i class="fas fa-plus mr-2"></i>
+                Nueva
+              </button>
+            </div>
           </div>
         </div>
 
@@ -162,6 +172,12 @@ export class TemplateManager {
             </div>
           </div>
           <div class="flex space-x-1">
+              <button type="button" class="export-template text-gray-400 hover:text-green-600 p-1 rounded hover:bg-green-50 transition" 
+                      data-template-id="${template.id}"
+                      title="Exportar plantilla (JSON)">
+                <i class="fas fa-file-export"></i>
+              </button>
+
               <button type="button" class="edit-template text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition" 
                       data-template-id="${template.id}"
                       title="Editar plantilla">
@@ -262,6 +278,19 @@ export class TemplateManager {
     if (newTemplateBtn)
       newTemplateBtn.addEventListener("click", () => this.showTemplateForm());
 
+    const importInput = document.getElementById("importTemplateInput");
+    const importBtn = document.getElementById("btnImportTemplate");
+
+    if (importBtn && importInput) {
+      importBtn.addEventListener("click", () => importInput.click());
+      importInput.addEventListener("change", (e) => {
+        if (e.target.files.length > 0) {
+          this.handleImportTemplate(e.target.files[0]);
+          e.target.value = "";
+        }
+      });
+    }
+
     document.querySelectorAll(".category-filter").forEach((btn) => {
       btn.addEventListener("click", (e) =>
         this.filterTemplatesByCategory(e.currentTarget.dataset.category)
@@ -286,6 +315,9 @@ export class TemplateManager {
         } else if (e.target.closest(".delete-template")) {
           if (id) this.deleteTemplate(id);
           e.stopPropagation();
+        } else if (e.target.closest(".export-template")) {
+          if (id) this.handleExportTemplate(id);
+          e.stopPropagation();
         } else if (
           templateCard &&
           !e.target.closest("button") &&
@@ -295,6 +327,52 @@ export class TemplateManager {
         }
       });
     }
+  }
+
+  async handleExportTemplate(id) {
+    try {
+      const data = await templateService.exportTemplate(id);
+      const dataStr = JSON.stringify(data, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      const safeName = (data.name || "plantilla")
+        .replace(/[^a-z0-9]/gi, "_")
+        .toLowerCase();
+      link.download = `${safeName}.template.json`;
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      this.showSuccess("✅ Plantilla exportada con éxito");
+    } catch (e) {
+      this.showError("Error al exportar: " + e.message);
+    }
+  }
+
+  async handleImportTemplate(file) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = JSON.parse(e.target.result);
+        if (!content.name || !content.fields) {
+          throw new Error("El archivo no parece ser una plantilla válida.");
+        }
+
+        await templateService.importTemplate(content);
+        this.showSuccess(
+          `✅ Plantilla "${content.name}" importada correctamente`
+        );
+        this.loadTemplates();
+      } catch (err) {
+        console.error(err);
+        this.showError("Error al importar: " + err.message);
+      }
+    };
+    reader.readAsText(file);
   }
 
   renderTemplateForm(template = null) {
@@ -502,17 +580,54 @@ export class TemplateManager {
               .join("")}
           </select>
         </div>
-        </div>
+      </div>
         
-        <div class="options-input-group ${
-          field?.type === "select" ? "" : "hidden"
-        } mt-4">
-          <label class="block text-sm font-medium text-gray-700 mb-1">Opciones (separadas por coma) *</label>
-          <textarea
-            class="field-options w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
-            placeholder="Ej: Banco, Tarjeta de Crédito, Inversión"
-          >${(field?.options || []).join(", ")}</textarea>
+      <div class="options-input-group ${
+        field?.type === "select" ? "" : "hidden"
+      } mt-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Opciones (separadas por coma) *</label>
+        <textarea
+          class="field-options w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition text-sm"
+          placeholder="Ej: Banco, Tarjeta de Crédito, Inversión"
+        >${(field?.options || []).join(", ")}</textarea>
+      </div>
+
+      <div class="columns-builder-group ${
+        field?.type === "table" ? "" : "hidden"
+      } mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Columnas de la Tabla</label>
+        <div class="columns-container space-y-2">
+          ${(field?.columns || [])
+            .map(
+              (col, i) => `
+            <div class="column-item flex space-x-2">
+              <input type="text" placeholder="Nombre Columna" value="${
+                col.name
+              }" class="col-name w-1/2 px-2 py-1 text-sm border border-gray-300 rounded">
+              <select class="col-type w-1/3 px-2 py-1 text-sm border border-gray-300 rounded">
+                <option value="string" ${
+                  col.type === "string" ? "selected" : ""
+                }>Texto</option>
+                <option value="number" ${
+                  col.type === "number" ? "selected" : ""
+                }>Número</option>
+                <option value="currency" ${
+                  col.type === "currency" ? "selected" : ""
+                }>Moneda</option>
+                <option value="date" ${
+                  col.type === "date" ? "selected" : ""
+                }>Fecha</option>
+              </select>
+              <button type="button" class="remove-column text-red-500 hover:text-red-700 px-2"><i class="fas fa-times"></i></button>
+            </div>
+          `
+            )
+            .join("")}
         </div>
+        <button type="button" class="add-column-btn mt-2 text-xs text-blue-600 font-medium hover:underline">
+          <i class="fas fa-plus mr-1"></i> Agregar Columna
+        </button>
+      </div>
       
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
         <div>
@@ -573,23 +688,45 @@ export class TemplateManager {
           e.target.closest(".field-item").remove();
           this.updateNoFieldsMessage();
         }
+
+        // Agregar Columna Tabla
+        if (e.target.closest(".add-column-btn")) {
+          const container = e.target
+            .closest(".columns-builder-group")
+            .querySelector(".columns-container");
+          const colHtml = `
+            <div class="column-item flex space-x-2">
+              <input type="text" placeholder="Nombre Columna" class="col-name w-1/2 px-2 py-1 text-sm border border-gray-300 rounded">
+              <select class="col-type w-1/3 px-2 py-1 text-sm border border-gray-300 rounded">
+                <option value="string">Texto</option>
+                <option value="number">Número</option>
+                <option value="currency">Moneda</option>
+                <option value="date">Fecha</option>
+              </select>
+              <button type="button" class="remove-column text-red-500 hover:text-red-700 px-2"><i class="fas fa-times"></i></button>
+            </div>`;
+          container.insertAdjacentHTML("beforeend", colHtml);
+        }
+
+        // Quitar Columna Tabla
+        if (e.target.closest(".remove-column")) {
+          e.target.closest(".column-item").remove();
+        }
       });
 
       fieldsContainer.addEventListener("change", (e) => {
         if (e.target.classList.contains("field-type")) {
           const fieldItem = e.target.closest(".field-item");
-          const optionsGroup = fieldItem.querySelector(".options-input-group");
+          const tableGroup = fieldItem.querySelector(".columns-builder-group");
+          const selectGroup = fieldItem.querySelector(".options-input-group");
 
-          if (e.target.value === "select") {
-            optionsGroup.classList.remove("hidden");
-            optionsGroup
-              .querySelector(".field-options")
-              .setAttribute("required", "required");
-          } else {
-            optionsGroup.classList.add("hidden");
-            optionsGroup
-              .querySelector(".field-options")
-              .removeAttribute("required");
+          tableGroup.classList.add("hidden");
+          selectGroup.classList.add("hidden");
+
+          if (e.target.value === "table") {
+            tableGroup.classList.remove("hidden");
+          } else if (e.target.value === "select") {
+            selectGroup.classList.remove("hidden");
           }
         }
       });
@@ -654,7 +791,13 @@ export class TemplateManager {
 
     fieldElements.forEach((fieldItem, index) => {
       const label = fieldItem.querySelector(".field-label")?.value || "";
-      const type = fieldItem.querySelector(".field-type")?.value || "string";
+
+      // FIX CRÍTICO: Asegurar que el tipo nunca sea undefined
+      let type = fieldItem.querySelector(".field-type")?.value;
+      if (!type || type === "undefined") {
+        type = "string";
+      }
+
       if (!label.trim())
         throw new Error(`Campo ${index + 1}: Nombre requerido`);
 
@@ -674,6 +817,26 @@ export class TemplateManager {
           .filter((o) => o.length > 0);
       }
 
+      let columns = [];
+      if (type === "table") {
+        const colItems = fieldItem.querySelectorAll(".column-item");
+        if (colItems.length === 0) {
+          throw new Error(
+            `La tabla '${label}' debe tener al menos una columna.`
+          );
+        }
+        colItems.forEach((col) => {
+          const cName = col.querySelector(".col-name").value.trim();
+          const cType = col.querySelector(".col-type").value;
+          if (cName)
+            columns.push({
+              name: cName,
+              type: cType,
+              id: generateFieldId(cName),
+            });
+        });
+      }
+
       fields.push({
         id: fieldId,
         label: label.trim(),
@@ -682,6 +845,7 @@ export class TemplateManager {
         placeholder: fieldItem.querySelector(".field-placeholder")?.value || "",
         required: fieldItem.querySelector(".field-required")?.checked || false,
         ...(options.length > 0 && { options }),
+        ...(columns.length > 0 && { columns }),
       });
     });
 

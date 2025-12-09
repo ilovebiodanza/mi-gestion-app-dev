@@ -137,7 +137,71 @@ export class DocumentViewer {
             </button>
           </div>`;
         } else if (field.type === "url") {
-          displayValue = `<a href="${value}" target="_blank" class="text-blue-600 hover:underline flex items-center"><i class="fas fa-external-link-alt mr-1 text-xs"></i> ${value}</a>`;
+          let url = value;
+          let text = value;
+
+          // Detectar si es el nuevo formato objeto
+          if (typeof value === "object" && value !== null) {
+            url = value.url;
+            text = value.text || value.url; // Si no hay texto, usar la URL
+          }
+
+          // Si no hay URL, mostrar vacío
+          if (!url) {
+            displayValue =
+              '<span class="text-gray-400 italic">Sin enlace</span>';
+          } else {
+            // Renderizar enlace con icono
+            displayValue = `<a href="${url}" target="_blank" class="text-blue-600 hover:underline flex items-center group">
+                <i class="fas fa-external-link-alt mr-2 text-xs text-blue-400 group-hover:text-blue-600"></i> 
+                ${text}
+            </a>`;
+          }
+        } else if (field.type === "table") {
+          // Renderizar tabla de solo lectura
+          const columns = field.columns || [];
+          const rows = Array.isArray(value) ? value : [];
+
+          if (rows.length === 0) {
+            displayValue =
+              '<span class="text-gray-400 italic">Tabla vacía</span>';
+          } else {
+            const headers = columns
+              .map(
+                (c) =>
+                  `<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase bg-gray-50">${c.name}</th>`
+              )
+              .join("");
+
+            const bodyRows = rows
+              .map((row) => {
+                const cells = columns
+                  .map((c) => {
+                    let cellVal = row[c.id];
+                    // Formato moneda si aplica
+                    if (c.type === "currency" && cellVal) {
+                      cellVal = new Intl.NumberFormat(currencyConfig.locale, {
+                        style: "currency",
+                        currency: currencyConfig.codigo,
+                      }).format(cellVal);
+                    }
+                    return `<td class="px-3 py-2 text-sm text-gray-700 border-t border-gray-100">${
+                      cellVal || "-"
+                    }</td>`;
+                  })
+                  .join("");
+                return `<tr>${cells}</tr>`;
+              })
+              .join("");
+
+            displayValue = `
+                <div class="mt-2 overflow-hidden border border-gray-200 rounded-lg">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead><tr>${headers}</tr></thead>
+                        <tbody class="bg-white">${bodyRows}</tbody>
+                    </table>
+                </div>`;
+          }
         } else {
           displayValue = String(value);
         }
@@ -155,6 +219,11 @@ export class DocumentViewer {
         <div class="border-b border-gray-100 last:border-0 py-4">
           <dt class="text-sm font-medium text-gray-500 mb-1 flex items-center">
             ${label}
+            ${
+              field.sensitive
+                ? '<i class="fas fa-lock text-red-400 ml-2 text-xs" title="Campo Sensible"></i>'
+                : ""
+            }
           </dt>
           <dd class="${ddClass}">${displayValue}</dd>
         </div>
@@ -222,6 +291,7 @@ export class DocumentViewer {
     this.setupContentListeners();
   }
 
+  // Generar texto para WhatsApp (Formateado)
   async handleCopyToWhatsApp() {
     try {
       const currencyConfig = getLocalCurrency();
@@ -234,6 +304,73 @@ export class DocumentViewer {
         const label = `*${field.label}:*`;
         let value = this.decryptedData[field.id];
 
+        // Si el campo es tabla, manejamos formato especial
+        if (field.type === "table") {
+          const rows = Array.isArray(value) ? value : [];
+          if (rows.length === 0) {
+            value = "_Sin registros_";
+            waText += `${label} ${value}\n`;
+          } else {
+            waText += `${label}\n`;
+            const columns = field.columns || [];
+
+            // Caso A: Tabla simple (1 columna) -> Lista con viñetas
+            if (columns.length === 1) {
+              const col = columns[0];
+              rows.forEach((row) => {
+                let cellVal = row[col.id];
+                // Formatear valor si es necesario
+                if (col.type === "currency" && cellVal) {
+                  cellVal = new Intl.NumberFormat(currencyConfig.locale, {
+                    style: "currency",
+                    currency: currencyConfig.codigo,
+                  }).format(cellVal);
+                } else if (col.type === "date" && cellVal) {
+                  try {
+                    const [y, m, d] = cellVal.split("-");
+                    cellVal = new Intl.DateTimeFormat(currencyConfig.locale, {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    }).format(new Date(y, m - 1, d));
+                  } catch (e) {}
+                }
+                waText += `  • ${cellVal || "-"}\n`;
+              });
+            }
+            // Caso B: Tabla compleja (>1 columna) -> Lista numerada con detalles
+            else {
+              rows.forEach((row, i) => {
+                waText += `  *${i + 1}.*\n`; // Nro de ítem
+                columns.forEach((col) => {
+                  let cellVal = row[col.id];
+                  // Formatear valor
+                  if (col.type === "currency" && cellVal) {
+                    cellVal = new Intl.NumberFormat(currencyConfig.locale, {
+                      style: "currency",
+                      currency: currencyConfig.codigo,
+                    }).format(cellVal);
+                  } else if (col.type === "date" && cellVal) {
+                    try {
+                      const [y, m, d] = cellVal.split("-");
+                      cellVal = new Intl.DateTimeFormat(currencyConfig.locale, {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      }).format(new Date(y, m - 1, d));
+                    } catch (e) {}
+                  }
+                  // Sangría de dos espacios como pediste
+                  waText += `    ${col.name}: ${cellVal || "-"}\n`;
+                });
+              });
+            }
+            waText += "\n"; // Separador visual después de la tabla
+            return; // Saltamos la lógica estándar de abajo
+          }
+        }
+
+        // Lógica estándar para otros campos
         if (value === undefined || value === null || value === "") {
           value = "_N/A_";
         } else if (field.type === "date" && value) {
@@ -257,6 +394,19 @@ export class DocumentViewer {
           }).format(value);
         } else if (field.type === "percentage") {
           value = `${value}%`;
+        } else if (field.type === "url") {
+          let url = value;
+          let text = value;
+          if (typeof value === "object" && value !== null) {
+            url = value.url;
+            text = value.text;
+          }
+          // Formato para WhatsApp: "Texto: URL" o solo "URL"
+          if (text && text !== url) {
+            value = `${text}: ${url}`;
+          } else {
+            value = url;
+          }
         }
 
         if (field.type === "text") {

@@ -105,6 +105,28 @@ class TemplateService {
     return { success: true, message: "Plantilla eliminada" };
   }
 
+  // --- NUEVOS MÉTODOS DE EXPORTACIÓN/IMPORTACIÓN ---
+
+  async exportTemplate(templateId) {
+    const template = await this.getTemplateById(templateId);
+    if (!template) throw new Error("Plantilla no encontrada");
+
+    // Crear copia limpia (sin datos de sistema)
+    // Eliminamos ID, userId y fechas para que sea un JSON puro de estructura
+    const { id, userId, createdAt, updatedAt, ...cleanTemplate } = template;
+
+    return cleanTemplate;
+  }
+
+  async importTemplate(templateData) {
+    // Reutilizamos createTemplate, que ya se encarga de asignar
+    // un nuevo ID, el usuario actual y las fechas nuevas.
+    // Además, createTemplate valida la estructura automáticamente.
+    return await this.createTemplate(templateData);
+  }
+
+  // --------------------------------------------------
+
   async getUserTemplates() {
     if (!this.isInitialized) throw new Error("Servicio no inicializado");
     if (this.userTemplates.length === 0) {
@@ -129,7 +151,6 @@ class TemplateService {
     }));
   }
 
-  // --- Plantillas por Defecto (SIN ATRIBUTO SENSIBLE) ---
   getDefaultTemplates() {
     return [
       {
