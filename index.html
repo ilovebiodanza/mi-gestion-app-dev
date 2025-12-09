@@ -30,6 +30,8 @@
         sendPasswordResetEmail,
         updatePassword,
         onAuthStateChanged,
+        reauthenticateWithCredential, // <--- NUEVO
+        EmailAuthProvider, // <--- NUEVO
       } from "https://www.gstatic.com/firebasejs/10.3.0/firebase-auth.js";
 
       // 👇👇👇 AQUÍ ESTÁ EL CAMBIO IMPORTANTE 👇👇👇
@@ -75,6 +77,8 @@
         sendPasswordResetEmail,
         updatePassword,
         onAuthStateChanged,
+        reauthenticateWithCredential, // <--- EXPORTAR NUEVO
+        EmailAuthProvider, // <--- EXPORTAR NUEVO
 
         // Firestore functions
         getFirestore,

@@ -8,18 +8,15 @@ import { templateService } from "./services/templates/index.js";
 import { DocumentEditor } from "./components/DocumentEditor.js";
 import { VaultList } from "./components/VaultList.js";
 import { DocumentViewer } from "./components/DocumentViewer.js";
+import { SettingsManager } from "./components/SettingsManager.js"; // <--- CAMBIO AQUÍ
 
 console.log("Mi Gestión - Aplicación inicializada");
 
-// Esperar a que el DOM esté listo
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOM cargado");
   initializeApplication();
 });
 
-/**
- * Función principal para inicializar la aplicación
- */
 async function initializeApplication() {
   const appElement = document.getElementById("app");
 
@@ -28,24 +25,16 @@ async function initializeApplication() {
     return;
   }
 
-  // Suscribirse a cambios de autenticación
   authService.subscribe(async (user) => {
     await handleAuthStateChange(user, appElement);
   });
 
-  // Mostrar estado inicial
   const user = authService.getCurrentUser();
   await handleAuthStateChange(user, appElement);
 }
 
-/**
- * Manejar cambios en el estado de autenticación
- */
 async function handleAuthStateChange(user, appElement) {
   if (user) {
-    // 👇 CORRECCIÓN CRÍTICA 👇
-    // Debemos esperar a que el servicio de plantillas esté listo ANTES de mostrar el dashboard.
-    // De lo contrario, VaultList intentará pedir plantillas que aún no se han cargado.
     try {
       console.log("⏳ Inicializando plantillas antes de cargar dashboard...");
       await templateService.initialize(user.uid);
@@ -53,33 +42,22 @@ async function handleAuthStateChange(user, appElement) {
       console.error("Error crítico al inicializar plantillas:", error);
     }
 
-    // Usuario autenticado - mostrar dashboard (Ahora es seguro)
     showDashboard(user, appElement);
-
-    // Verificar si el cifrado está inicializado
     await checkAndInitializeEncryption(user);
   } else {
-    // Usuario no autenticado - mostrar formularios de auth
     showAuthForms(appElement);
   }
 }
 
-/**
- * Verificar e inicializar cifrado si es necesario
- */
 async function checkAndInitializeEncryption(user) {
-  // Esperar un momento para que la UI se cargue
   setTimeout(async () => {
-    // Verificar si el cifrado ya está inicializado
     const isEncryptionInitialized = encryptionService.isReady();
 
     if (!isEncryptionInitialized) {
       console.log("🔐 Cifrado no inicializado, mostrando prompt...");
 
-      // Mostrar prompt para solicitar contraseña
       const passwordPrompt = new PasswordPrompt(async (password) => {
         try {
-          // Inicializar cifrado con la contraseña
           await authService.initializeEncryption(password);
           return true;
         } catch (error) {
@@ -88,7 +66,6 @@ async function checkAndInitializeEncryption(user) {
         }
       }, user.email);
 
-      // Mostrar después de un pequeño delay para mejor UX
       setTimeout(() => {
         passwordPrompt.show();
       }, 500);
@@ -98,9 +75,6 @@ async function checkAndInitializeEncryption(user) {
   }, 1000);
 }
 
-/**
- * Mostrar formularios de autenticación
- */
 function showAuthForms(appElement) {
   const authForms = new AuthForms((userData) => {
     console.log("✅ Auth success callback:", userData);
@@ -135,7 +109,21 @@ function showAuthForms(appElement) {
 /**
  * Mostrar dashboard para usuario autenticado
  */
-function showDashboard(user, appElement) {
+async function showDashboard(user, appElement) {
+  // Hacemos la función async
+
+  // 1. Obtener el rol del usuario
+  const userRole = await authService.getUserRole();
+  console.log("👤 Rol detectado:", userRole);
+
+  // 2. HTML condicional para el botón Admin
+  const adminButtonHtml =
+    userRole === "admin"
+      ? `<a href="#" class="text-red-600 hover:text-red-800 px-3 py-2 rounded-md text-sm font-bold border border-red-200 bg-red-50 ml-2" id="navAdmin">
+         <i class="fas fa-user-shield mr-1"></i> Panel Admin
+       </a>`
+      : "";
+
   appElement.innerHTML = `
     <div class="min-h-screen bg-gray-50">
       <nav class="bg-white shadow-sm">
@@ -147,16 +135,17 @@ function showDashboard(user, appElement) {
                 <h1 class="text-xl font-bold text-gray-800">Mi Gestión</h1>
               </div>
               <div class="hidden md:block ml-10">
-                <div class="flex space-x-4">
+                <div class="flex space-x-4 items-center">
                   <a href="#" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium" id="navHome">
                     <i class="fas fa-home mr-1"></i> Inicio
                   </a>
                   <a href="#mis-datos" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium" id="navMyData">
                     <i class="fas fa-database mr-1"></i> Mis Datos
                   </a>
-                  <a href="#" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium">
+                  <a href="#" class="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium" id="navSettings">
                     <i class="fas fa-cogs mr-1"></i> Configuración
                   </a>
+                  ${adminButtonHtml}
                 </div>
               </div>
             </div>
@@ -165,6 +154,9 @@ function showDashboard(user, appElement) {
               <div class="flex items-center space-x-3">
                 <div class="text-right hidden md:block">
                   <p class="text-sm font-medium text-gray-700">${user.email}</p>
+                  <p class="text-xs text-gray-500">${
+                    userRole === "admin" ? "Administrador" : "Usuario"
+                  }</p>
                 </div>
                 <div class="relative">
                   <button id="userMenuButton" class="flex items-center space-x-2 bg-gray-100 hover:bg-gray-200 rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -193,12 +185,20 @@ function showDashboard(user, appElement) {
   `;
 
   setupDashboardListeners();
+
+  // Agregar listener para el botón Admin si existe
+  if (userRole === "admin") {
+    document.getElementById("navAdmin")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      alert(
+        "🚧 Panel de Administración en construcción.\nAquí podrás gestionar plantillas globales y usuarios."
+      );
+    });
+  }
+
   showVaultListView(user);
 }
 
-/**
- * Mostrar la vista de lista de la bóveda
- */
 function showVaultListView(user) {
   const mainContainer = document.querySelector("main");
   if (!mainContainer) return;
@@ -233,9 +233,6 @@ function showVaultListView(user) {
   vaultList.loadDocuments();
 }
 
-/**
- * Mostrar detalles del documento
- */
 async function showDocumentDetails(docId, user) {
   const appElement = document.getElementById("app");
 
@@ -259,9 +256,6 @@ async function showDocumentDetails(docId, user) {
   await viewer.load();
 }
 
-/**
- * Mostrar editor de documentos (Creación)
- */
 async function showDocumentEditor(templateId, user) {
   const appElement = document.getElementById("app");
 
@@ -298,9 +292,6 @@ async function showDocumentEditor(templateId, user) {
   }
 }
 
-/**
- * Función auxiliar para abrir el editor en modo Edición
- */
 function openEditorForUpdate(initialData, user) {
   const appElement = document.getElementById("app");
 
@@ -324,9 +315,6 @@ function openEditorForUpdate(initialData, user) {
   editor.setupEventListeners();
 }
 
-/**
- * Mostrar gestor de plantillas
- */
 function showTemplateManager(user) {
   const appElement = document.getElementById("app");
   if (!appElement) return;
@@ -374,9 +362,16 @@ function showTemplateManager(user) {
   });
 }
 
-/**
- * Configurar listeners del dashboard
- */
+// NUEVA FUNCIÓN PARA MOSTRAR CONFIGURACIÓN
+function showSettings(user) {
+  const mainContainer = document.querySelector("main");
+  if (!mainContainer) return;
+
+  const settingsManager = new SettingsManager(); // CAMBIO: Usamos SettingsManager
+  mainContainer.innerHTML = settingsManager.render();
+  settingsManager.setupEventListeners();
+}
+
 function setupDashboardListeners() {
   const userMenuButton = document.getElementById("userMenuButton");
   const userMenu = document.getElementById("userMenu");
@@ -412,9 +407,15 @@ function setupDashboardListeners() {
     const user = authService.getCurrentUser();
     showVaultListView(user);
   });
+
+  // LISTENER PARA CONFIGURACIÓN
+  document.getElementById("navSettings")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const user = authService.getCurrentUser();
+    showSettings(user);
+  });
 }
 
-// Nueva función para el flujo de login exitoso
 async function initializePostLogin(user, password) {
   await encryptionService.initialize(password, user.uid);
 }
