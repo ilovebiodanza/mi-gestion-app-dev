@@ -1,46 +1,88 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="h-full bg-slate-50">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mi Gestión - Gestión Segura de Datos Personales</title>
+    <title>Mi Gestión - Gestión Segura de Datos</title>
     <meta
       name="description"
-      content="Aplicación web para almacenamiento seguro de información personal con cifrado de extremo a extremo"
+      content="Almacenamiento seguro de información personal con cifrado E2EE"
     />
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="/assets/favicon-B_SY1GJM.ico" />
 
-    <!-- Font Awesome Icons -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
 
-    <!-- Firebase SDK v9 (modular) desde CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class", // Preparado para futuro modo oscuro
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+            },
+            colors: {
+              // Mapeamos tus variables originales a Tailwind
+              primary: {
+                DEFAULT: "#2563eb", // Blue 600
+                hover: "#1d4ed8", // Blue 700
+                light: "#eff6ff", // Blue 50
+              },
+              secondary: {
+                DEFAULT: "#7c3aed", // Violet 600
+                hover: "#6d28d9", // Violet 700
+              },
+              success: "#10b981",
+              danger: "#ef4444",
+            },
+          },
+        },
+      };
+    </script>
 
-    <!-- Favicon -->
-    <link rel="icon" href="/assets/favicon-B_SY1GJM.ico" />
 
-    <!-- CSS Personalizado -->
-    <script type="module" crossorigin src="/assets/main-BI40cBgK.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/main-CarpqbIs.css">
+    <style type="text/tailwindcss">
+      @layer utilities {
+        .text-shadow {
+          text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+      }
+      /* Ocultar scrollbar pero permitir scroll */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+
+    <script type="module" crossorigin src="/assets/main-D9PoEc0n.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/main-CDegp2Aj.css">
   </head>
-  <body class="bg-gray-50">
-    <div id="app">
-      <!-- La aplicación se cargará aquí -->
-      <div class="flex justify-center items-center h-screen">
-        <div class="text-center">
+  <body
+    class="h-full antialiased text-slate-800 bg-slate-50 selection:bg-primary selection:text-white"
+  >
+    <div id="app" class="h-full">
+      <div class="flex flex-col justify-center items-center h-screen bg-white">
+        <div class="relative">
           <div
-            class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"
+            class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-primary"
           ></div>
-          <p class="mt-4 text-gray-600">Cargando Mi Gestión...</p>
+          <div
+            class="absolute top-0 left-0 h-16 w-16 rounded-full border-4 border-primary/20 animate-pulse"
+          ></div>
         </div>
+        <p class="mt-6 text-slate-500 font-medium animate-pulse">
+          Cargando entorno seguro...
+        </p>
       </div>
     </div>
 
-    <!-- JavaScript principal -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
   </body>
 </html>
