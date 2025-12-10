@@ -13,6 +13,10 @@ export class DocumentViewer {
     this.template = null;
     this.decryptedData = null;
     this.currencyConfig = getLocalCurrency();
+
+    // Estado para manejar filtros y ordenamiento de tablas
+    // Estructura: { fieldId: { search: "", sortCol: null, sortDir: "asc" } }
+    this.tableStates = {};
   }
 
   render() {
@@ -37,6 +41,17 @@ export class DocumentViewer {
         metadata: this.document.encryptionMetadata,
       });
 
+      // Inicializar estados de tablas
+      this.template.fields.forEach((f) => {
+        if (f.type === "table") {
+          this.tableStates[f.id] = {
+            search: "",
+            sortCol: null,
+            sortDir: "asc",
+          };
+        }
+      });
+
       this.renderContent();
     } catch (error) {
       console.error("Error:", error);
@@ -44,7 +59,7 @@ export class DocumentViewer {
     }
   }
 
-  // --- RENDERIZADO DE VALORES (Formateo rico) ---
+  // --- RENDERIZADO DE VALORES ---
   renderFieldValue(type, value, isTableContext = false) {
     if (
       value === undefined ||
@@ -85,8 +100,14 @@ export class DocumentViewer {
         return `<span class="font-mono text-slate-700">${value}%</span>`;
 
       case "secret":
-        if (isTableContext)
-          return '<span class="text-xs text-slate-400 font-mono">••••••</span>';
+        if (isTableContext) {
+          // Versión compacta para tabla
+          return `
+            <div class="relative group inline-flex items-center">
+              <span class="text-xs text-slate-400 font-mono filter blur-[3px] group-hover:blur-none transition-all duration-300 cursor-pointer select-none">••••••</span>
+              <span class="absolute inset-0 hidden group-hover:flex items-center justify-center bg-white/90 text-xs font-mono text-slate-800 shadow-sm border rounded px-1">${value}</span>
+            </div>`;
+        }
         return `
             <div class="relative group inline-flex items-center max-w-full">
               <div class="secret-container relative overflow-hidden rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 transition-all duration-300 group-hover:border-primary/30 group-hover:shadow-sm">
@@ -105,17 +126,26 @@ export class DocumentViewer {
         let url = value;
         let text = value;
         if (typeof value === "object" && value !== null) {
-          url = value.url;
-          text = value.text || value.url;
+          url = value.url || "";
+          text = value.text || "";
+        } else {
+          url = String(value || "");
         }
+
         if (!url)
-          return '<span class="text-slate-300 italic">Sin enlace</span>';
-        const display =
-          isTableContext && text.length > 20
-            ? text.substring(0, 17) + "..."
-            : text;
-        return `<a href="${url}" target="_blank" class="inline-flex items-center text-primary hover:text-primary-hover hover:underline transition-colors group">
-                <i class="fas fa-link mr-1.5 text-xs opacity-50 group-hover:opacity-100"></i> ${display}
+          return '<span class="text-slate-300 italic text-xs">Sin enlace</span>';
+        const displayText = text.trim() !== "" ? text : url;
+        const finalDisplay =
+          isTableContext && displayText.length > 25
+            ? displayText.substring(0, 22) + "..."
+            : displayText;
+
+        return `
+            <a href="${url}" target="_blank" rel="noopener noreferrer" 
+               class="inline-flex items-center gap-1.5 text-primary hover:text-primary-hover hover:underline transition-colors group" 
+               title="${url}">
+                <i class="fas fa-external-link-alt text-[10px] opacity-70 group-hover:opacity-100"></i>
+                <span class="font-medium">${finalDisplay}</span>
             </a>`;
 
       case "text":
@@ -167,7 +197,6 @@ export class DocumentViewer {
 
     container.innerHTML = `
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2 no-print">
-         
          <button id="backBtn" class="flex items-center text-slate-500 hover:text-primary transition-colors font-medium">
             <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-2 shadow-sm">
                 <i class="fas fa-arrow-left text-sm"></i>
@@ -182,9 +211,7 @@ export class DocumentViewer {
             <button id="pdfDocBtn" class="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" title="Imprimir / PDF">
                <i class="fas fa-print text-lg"></i>
             </button>
-
             <div class="h-6 w-px bg-slate-200 mx-1"></div>
-
             <button id="deleteDocBtn" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
                <i class="far fa-trash-alt text-lg"></i>
             </button>
@@ -255,31 +282,84 @@ export class DocumentViewer {
     this.setupContentListeners();
   }
 
-  renderTableField(field, value) {
-    const rows = Array.isArray(value) ? value : [];
-    const columns = field.columns || [];
+  // --- LÓGICA DE TABLAS MEJORADA (Búsqueda y Ordenamiento) ---
 
-    if (rows.length === 0) {
-      return `
-        <div class="py-5 px-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/30 text-center my-4">
-            <p class="text-sm font-medium text-slate-500 mb-1">${field.label}</p>
-            <p class="text-xs text-slate-400">Sin registros almacenados</p>
-        </div>`;
+  // Función para obtener filas procesadas (filtradas y ordenadas)
+  getProcessedRows(field, rows) {
+    const state = this.tableStates[field.id] || {
+      search: "",
+      sortCol: null,
+      sortDir: "asc",
+    };
+    let processed = [...rows];
+
+    // 1. Filtrado
+    if (state.search) {
+      const term = state.search.toLowerCase();
+      const columnsToCheck = field.columns.slice(0, 3); // Buscar solo en columnas visibles
+      processed = processed.filter((row) => {
+        return columnsToCheck.some((col) => {
+          let val = row[col.id];
+          // Manejar objetos especiales (URL)
+          if (typeof val === "object" && val !== null) {
+            val = val.text || val.url || "";
+          }
+          return String(val || "")
+            .toLowerCase()
+            .includes(term);
+        });
+      });
     }
 
-    const isComplex = columns.length > 3;
-    const displayColumns = isComplex ? columns.slice(0, 3) : columns;
+    // 2. Ordenamiento
+    if (state.sortCol) {
+      const colId = state.sortCol;
+      const colDef = field.columns.find((c) => c.id === colId);
 
-    const headers = displayColumns
-      .map(
-        (c) =>
-          `<th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">${
-            c.label || c.name
-          }</th>`
-      )
-      .join("");
+      processed.sort((a, b) => {
+        let valA = a[colId];
+        let valB = b[colId];
 
-    const body = rows
+        // Normalizar valores nulos
+        if (valA === undefined || valA === null) valA = "";
+        if (valB === undefined || valB === null) valB = "";
+
+        // Extraer valor real si es URL
+        if (typeof valA === "object") valA = valA.text || valA.url || "";
+        if (typeof valB === "object") valB = valB.text || valB.url || "";
+
+        // Orden numérico
+        if (
+          colDef &&
+          ["number", "currency", "percentage"].includes(colDef.type)
+        ) {
+          return state.sortDir === "asc" ? valA - valB : valB - valA;
+        }
+
+        // Orden alfanumérico
+        return state.sortDir === "asc"
+          ? String(valA).localeCompare(String(valB))
+          : String(valB).localeCompare(String(valA));
+      });
+    }
+
+    return processed;
+  }
+
+  // Función para generar SOLO el cuerpo de la tabla (usada al filtrar/ordenar)
+  generateTableBodyHtml(field, rows) {
+    const isComplex = field.columns.length > 3;
+    const displayColumns = isComplex
+      ? field.columns.slice(0, 3)
+      : field.columns;
+
+    if (rows.length === 0) {
+      return `<tr><td colspan="${
+        displayColumns.length + (isComplex ? 1 : 0)
+      }" class="py-8 text-center text-slate-400 text-sm">No se encontraron registros</td></tr>`;
+    }
+
+    return rows
       .map((row, idx) => {
         const cells = displayColumns
           .map(
@@ -299,27 +379,93 @@ export class DocumentViewer {
         return `<tr class="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 even:bg-slate-50/50">${cells}${actionBtn}</tr>`;
       })
       .join("");
+  }
+
+  // Función para renderizar el componente de tabla completo (Input + Tabla)
+  renderTableField(field, value) {
+    const rows = Array.isArray(value) ? value : [];
+    if (rows.length === 0) {
+      return `
+        <div class="py-5 px-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/30 text-center my-4">
+            <p class="text-sm font-medium text-slate-500 mb-1">${field.label}</p>
+            <p class="text-xs text-slate-400">Sin registros almacenados</p>
+        </div>`;
+    }
+
+    const state = this.tableStates[field.id] || {
+      search: "",
+      sortCol: null,
+      sortDir: "asc",
+    };
+    const processedRows = this.getProcessedRows(field, rows);
+
+    const isComplex = field.columns.length > 3;
+    const displayColumns = isComplex
+      ? field.columns.slice(0, 3)
+      : field.columns;
+
+    // Headers con funcionalidad de click
+    const headers = displayColumns
+      .map((c) => {
+        let sortIcon = '<i class="fas fa-sort text-slate-300 ml-1"></i>';
+        if (state.sortCol === c.id) {
+          sortIcon =
+            state.sortDir === "asc"
+              ? '<i class="fas fa-sort-up text-primary ml-1"></i>'
+              : '<i class="fas fa-sort-down text-primary ml-1"></i>';
+        }
+        return `<th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition select-none table-header-sort" data-field-id="${
+          field.id
+        }" data-col-id="${c.id}">
+            <div class="flex items-center">${
+              c.label || c.name
+            } ${sortIcon}</div>
+        </th>`;
+      })
+      .join("");
 
     return `
       <div class="py-6 sm:col-span-3">
-         <div class="flex items-center justify-between mb-3">
-             <dt class="text-sm font-medium text-slate-500">${field.label}</dt>
-             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${
-               rows.length
-             } registros</span>
+         <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+             <div class="flex items-center">
+                 <dt class="text-sm font-medium text-slate-500 mr-2">${
+                   field.label
+                 }</dt>
+                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${
+                   rows.length
+                 } total</span>
+             </div>
+             
+             <div class="relative max-w-xs w-full sm:w-64">
+                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                     <i class="fas fa-search text-xs"></i>
+                 </div>
+                 <input type="text" 
+                        class="table-search-input w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition outline-none"
+                        placeholder="Buscar en tabla..." 
+                        data-field-id="${field.id}"
+                        value="${state.search}">
+             </div>
          </div>
+
          <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
              <div class="overflow-x-auto">
-                 <table class="min-w-full divide-y divide-slate-100">
+                 <table class="min-w-full divide-y divide-slate-100" id="table-${
+                   field.id
+                 }">
                     <thead class="bg-slate-50"><tr>${headers}${
       isComplex ? '<th class="w-10"></th>' : ""
     }</tr></thead>
-                    <tbody class="divide-y divide-slate-100 bg-white">${body}</tbody>
+                    <tbody class="divide-y divide-slate-100 bg-white" id="tbody-${
+                      field.id
+                    }">
+                        ${this.generateTableBodyHtml(field, processedRows)}
+                    </tbody>
                  </table>
              </div>
              ${
                isComplex
-                 ? '<div class="bg-slate-50/50 px-4 py-2 text-[10px] text-slate-400 text-center border-t border-slate-100 uppercase tracking-wide">Mostrando vista previa • Click en ojo para detalles</div>'
+                 ? '<div class="bg-slate-50/50 px-4 py-2 text-[10px] text-slate-400 text-center border-t border-slate-100 uppercase tracking-wide">Mostrando resumen • Click en ojo para detalles</div>'
                  : ""
              }
          </div>
@@ -328,7 +474,7 @@ export class DocumentViewer {
   }
 
   setupContentListeners() {
-    // Botones globales
+    // Botones globales (se mantienen igual)
     ["closeViewerBtn", "backBtn"].forEach((id) =>
       document
         .getElementById(id)
@@ -347,17 +493,45 @@ export class DocumentViewer {
       .getElementById("whatsappDocBtn")
       ?.addEventListener("click", () => this.handleCopyToWhatsApp());
 
-    // Delegación de eventos
     const container = document.getElementById("documentViewerPlaceholder");
+
+    // 1. LISTENERS BÚSQUEDA EN TABLA
+    container.querySelectorAll(".table-search-input").forEach((input) => {
+      input.addEventListener("input", (e) => {
+        const fieldId = e.target.dataset.fieldId;
+        const query = e.target.value;
+        this.tableStates[fieldId].search = query;
+        this.updateTableUI(fieldId);
+      });
+    });
+
+    // 2. LISTENERS ORDENAMIENTO EN TABLA
     container.addEventListener("click", (e) => {
-      // Toggle Secret
+      const header = e.target.closest(".table-header-sort");
+      if (header) {
+        const fieldId = header.dataset.fieldId;
+        const colId = header.dataset.colId;
+        const state = this.tableStates[fieldId];
+
+        // Alternar orden
+        if (state.sortCol === colId) {
+          state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+        } else {
+          state.sortCol = colId;
+          state.sortDir = "asc";
+        }
+        // Re-renderizar SOLO la tabla (para actualizar iconos y filas)
+        this.refreshTableFieldHTML(fieldId);
+      }
+
+      // --- Manejo normal de botones (Secret, Copy, RowModal) ---
+      // (Se mantiene igual que antes, solo lo copiamos para no perderlo)
       const toggleBtn = e.target.closest(".toggle-secret-btn");
       if (toggleBtn) {
         const wrapper = toggleBtn.parentElement;
         const mask = wrapper.querySelector(".secret-mask");
         const revealed = wrapper.querySelector(".secret-revealed");
         const icon = toggleBtn.querySelector("i");
-
         if (revealed.classList.contains("hidden")) {
           mask.classList.add("hidden");
           revealed.classList.remove("hidden");
@@ -370,8 +544,6 @@ export class DocumentViewer {
           toggleBtn.classList.remove("text-primary");
         }
       }
-
-      // Copiar
       const copyBtn = e.target.closest(".copy-btn");
       if (copyBtn) {
         navigator.clipboard.writeText(copyBtn.dataset.value);
@@ -379,8 +551,6 @@ export class DocumentViewer {
         icon.className = "fas fa-check text-emerald-500";
         setTimeout(() => (icon.className = "far fa-copy"), 1500);
       }
-
-      // Ver fila modal
       const viewRowBtn = e.target.closest(".view-row-btn");
       if (viewRowBtn)
         this.openRowModal(
@@ -389,7 +559,7 @@ export class DocumentViewer {
         );
     });
 
-    // Modal
+    // Modal cerrar
     const modal = document.getElementById("rowDetailModal");
     const closeModal = () => modal.classList.add("hidden");
     modal
@@ -400,10 +570,63 @@ export class DocumentViewer {
       ?.addEventListener("click", closeModal);
   }
 
+  // --- HELPERS ACTUALIZACIÓN UI PARCIAL ---
+
+  // Actualiza solo el TBODY (usado en Búsqueda)
+  updateTableUI(fieldId) {
+    const field = this.template.fields.find((f) => f.id === fieldId);
+    const rows = this.decryptedData[fieldId] || [];
+    const processed = this.getProcessedRows(field, rows);
+
+    const tbody = document.getElementById(`tbody-${fieldId}`);
+    if (tbody) {
+      tbody.innerHTML = this.generateTableBodyHtml(field, processed);
+    }
+  }
+
+  // Re-renderiza todo el bloque de la tabla (usado en Sort para actualizar iconos header)
+  refreshTableFieldHTML(fieldId) {
+    const field = this.template.fields.find((f) => f.id === fieldId);
+    const rows = this.decryptedData[fieldId] || [];
+
+    // Encontrar el div padre de la tabla actual y reemplazarlo con el nuevo HTML
+    const table = document.getElementById(`table-${fieldId}`);
+    if (table) {
+      // Subimos hasta encontrar el contenedor padre creado en renderTableField
+      const containerDiv = table.closest(".py-6");
+      if (containerDiv) {
+        containerDiv.outerHTML = this.renderTableField(field, rows);
+        // IMPORTANTE: Al reemplazar HTML, los listeners del input de búsqueda se pierden.
+        // Hay que reasignarlos.
+        const newContainer = document
+          .getElementById(`table-${fieldId}`)
+          .closest(".py-6");
+        const input = newContainer.querySelector(".table-search-input");
+        if (input) {
+          input.addEventListener("input", (e) => {
+            this.tableStates[fieldId].search = e.target.value;
+            this.updateTableUI(fieldId);
+          });
+          // Poner foco de vuelta al input si fue una búsqueda (aunque sort no usa input)
+          // En caso de sort, no necesitamos focus.
+        }
+      }
+    }
+  }
+
+  // ... (openRowModal, renderLoading, renderError, handleDelete, handleEdit, handleCopyToWhatsApp, getFormattedValueForText se mantienen igual)
   openRowModal(fieldId, rowIndex) {
     const field = this.template.fields.find((f) => f.id === fieldId);
     if (!field) return;
-    const rowData = this.decryptedData[fieldId][rowIndex];
+
+    // IMPORTANTE: Debemos obtener la fila correcta incluso si la tabla está filtrada/ordenada
+    // Pero el índice que viene del botón ya corresponde a la lista procesada visualmente?
+    // NO, el índice 'rowIndex' en el HTML generado viene del map sobre 'rows' procesadas.
+    // Así que necesitamos acceder a la lista procesada, no a la original 'decryptedData'.
+
+    const rowsOriginal = this.decryptedData[fieldId] || [];
+    const rowsProcessed = this.getProcessedRows(field, rowsOriginal);
+    const rowData = rowsProcessed[rowIndex];
 
     const content = field.columns
       .map(

@@ -43,25 +43,37 @@ class TemplateFormGenerator {
     }
     // 3. URL Compuesta
     else if (inputType === "url") {
+      // Aseguramos que manejamos tanto si viene como objeto {url, text} o string antiguo
       let urlVal =
         currentValue?.url ||
         (typeof currentValue === "string" ? currentValue : "");
       let textVal = currentValue?.text || "";
 
       inputHtml = `
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 url-group">
-           <div class="sm:col-span-2 relative">
-             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="fas fa-link text-xs"></i></div>
-             <input type="url" id="${field.id}_url" class="${this.inputBaseClass} pl-9" 
-                    placeholder="https://ejemplo.com" value="${urlVal}" ${requiredAttr} />
-           </div>
-           <div class="relative">
-             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="fas fa-font text-xs"></i></div>
-             <input type="text" id="${field.id}_text" class="${this.inputBaseClass} pl-9" 
-                    placeholder="Etiqueta (Opcional)" value="${textVal}" />
-           </div>
-        </div>
-      `;
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 url-group">
+             <div class="relative">
+               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Dirección Web (Link)</label>
+               <div class="absolute inset-y-0 left-0 pl-3 top-6 flex items-center pointer-events-none text-slate-400">
+                 <i class="fas fa-link text-xs"></i>
+               </div>
+               <input type="url" id="${field.id}_url" 
+                      class="${this.inputBaseClass} pl-9" 
+                      placeholder="https://ejemplo.com" 
+                      value="${urlVal}" ${requiredAttr} />
+             </div>
+             
+             <div class="relative">
+               <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Texto Visible (Opcional)</label>
+               <div class="absolute inset-y-0 left-0 pl-3 top-6 flex items-center pointer-events-none text-slate-400">
+                 <i class="fas fa-font text-xs"></i>
+               </div>
+               <input type="text" id="${field.id}_text" 
+                      class="${this.inputBaseClass} pl-9" 
+                      placeholder="Ej: Ver Factura" 
+                      value="${textVal}" />
+             </div>
+          </div>
+        `;
     }
     // 4. Select
     else if (inputType === "select") {
