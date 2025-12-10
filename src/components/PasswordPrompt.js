@@ -8,6 +8,9 @@ export class PasswordPrompt {
   }
 
   render() {
+    // Generamos un nombre aleatorio para despistar al gestor de contraseñas del navegador
+    const randomFieldName = `safe_key_${Math.floor(Math.random() * 100000)}`;
+
     return `
       <div class="fixed inset-0 z-50 flex items-center justify-center px-4">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"></div>
@@ -45,17 +48,21 @@ export class PasswordPrompt {
                 <input
                   type="password"
                   id="encryptionPassword"
+                  name="${randomFieldName}"
+                  autocomplete="new-password"
+                  data-lpignore="true"
+                  readonly
+                  onfocus="this.removeAttribute('readonly');"
                   placeholder="Contraseña maestra"
                   class="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-sm"
-                  autocomplete="current-password"
                 />
               </div>
               
               <div class="bg-amber-50 border border-amber-100 rounded-xl p-4 flex gap-3">
                 <i class="fas fa-exclamation-triangle text-amber-500 mt-0.5 flex-shrink-0"></i>
                 <div class="text-xs text-amber-800 space-y-1">
-                  <p class="font-bold">Información Crítica:</p>
-                  <p>Esta contraseña nunca se envía a nuestros servidores. Si la pierdes, tus datos cifrados serán irrecuperables.</p>
+                  <p class="font-bold">Modo Seguro Bancario:</p>
+                  <p>Por tu seguridad, esta contraseña no se guarda en el navegador. Debes ingresarla manualmente.</p>
                 </div>
               </div>
               
@@ -87,17 +94,20 @@ export class PasswordPrompt {
   show() {
     const overlay = document.createElement("div");
     overlay.id = "encryptionPromptOverlay";
-    // Aseguramos que el overlay tenga un z-index alto para estar sobre todo
     overlay.style.position = "relative";
     overlay.style.zIndex = "9999";
     overlay.innerHTML = this.render();
     document.body.appendChild(overlay);
 
-    // Auto-focus al input
+    // Auto-focus inteligente: Esperamos un poco y quitamos el readonly
+    // para que el usuario pueda escribir directo, pero sin disparar el gestor de contraseñas
     setTimeout(() => {
       const input = document.getElementById("encryptionPassword");
-      if (input) input.focus();
-    }, 100);
+      if (input) {
+        input.removeAttribute("readonly");
+        input.focus();
+      }
+    }, 150);
 
     this.setupEventListeners();
   }
@@ -146,7 +156,8 @@ export class PasswordPrompt {
         } else {
           this.showError("Contraseña incorrecta");
           this.resetForm();
-          passwordInput.select();
+          passwordInput.value = ""; // Limpiar por seguridad
+          passwordInput.focus();
         }
       } catch (error) {
         this.showError(error.message || "Error crítico");
@@ -161,7 +172,7 @@ export class PasswordPrompt {
       if (e.key === "Enter" && !this.isSubmitting) handleSubmit();
     });
 
-    // Cerrar al hacer click fuera del modal
+    // Cerrar al hacer click fuera
     const overlay = document.getElementById("encryptionPromptOverlay");
     overlay
       .querySelector(".absolute")
@@ -178,7 +189,6 @@ export class PasswordPrompt {
       "p-3 bg-red-50 text-red-700 text-sm rounded-lg flex items-center animate-pulse border border-red-100";
     errorDiv.innerHTML = `<i class="fas fa-times-circle mr-2 text-red-500"></i> ${message}`;
 
-    // Insertar antes de los botones (último hijo de space-y-5)
     container.insertBefore(errorDiv, container.lastElementChild);
   }
 

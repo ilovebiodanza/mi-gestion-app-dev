@@ -8,35 +8,111 @@ export class DocumentEditor {
     this.initialData = initialData;
     this.onSaveSuccess = onSaveSuccess;
     this.onCancel = onCancel;
+
     this.isEditing = !!initialData.documentId;
     this.documentId = initialData.documentId || null;
+
     this.template = initialData.template || null;
     this.initialFormData = initialData.formData || {};
     this.documentMetadata = initialData.metadata || {};
+
     this.isSubmitting = false;
 
+    // LÓGICA DE SEGURIDAD E INICIALIZACIÓN
+    // Si estamos editando un documento existente y no tenemos la plantilla cargada
+    // (lo que implica que tampoco tenemos los datos descifrados), iniciamos el flujo de carga segura.
     if (this.isEditing && !this.template) {
+      this.checkSecurityAndLoad();
+    }
+  }
+
+  checkSecurityAndLoad() {
+    // 1. Verificamos si el servicio de cifrado tiene la llave maestra en memoria
+    if (!encryptionService.isReady()) {
+      console.log(
+        "🔐 Bóveda cerrada. Solicitando llave para descifrar datos..."
+      );
+
+      // 2. Si la bóveda está cerrada, llamamos al orquestador global (definido en app.js)
+      // para que muestre el Prompt de contraseña.
+      if (window.app && window.app.requireEncryption) {
+        window.app.requireEncryption(() => {
+          // Callback: Se ejecuta solo si el usuario ingresó la clave correctamente
+          this.loadExistingDocument();
+        });
+      } else {
+        // Fallback de seguridad por si la app no cargó bien
+        this.renderError(
+          "Sistema de seguridad no disponible. Por favor recarga la página."
+        );
+      }
+    } else {
+      // 3. Si la bóveda ya está abierta, cargamos directamente
       this.loadExistingDocument();
     }
   }
 
-  async loadExistingDocument() {
-    this.updateEditorState(true, "Descifrando datos...");
+  async handleSave() {
+    if (this.isSubmitting) return;
+
+    // 1. Validación básica de HTML5 (campos requeridos, tipos, etc.)
+    const form = document.querySelector(`form[id^="templateForm_"]`);
+    if (form && !form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    // 2. BARRERA DE SEGURIDAD (Critical Path)
+    // Antes de recolectar y procesar datos, aseguramos que podemos cifrarlos.
+    if (!encryptionService.isReady()) {
+      console.log("🔐 Llave requerida para cifrar antes de guardar.");
+
+      if (window.app && window.app.requireEncryption) {
+        window.app.requireEncryption(() => {
+          // Reintentamos el guardado una vez que la bóveda esté abierta
+          this.handleSave();
+        });
+      }
+      return;
+    }
+
+    // 3. Inicio del proceso de guardado
+    this.updateEditorState(
+      true,
+      this.isEditing ? "Cifrando y actualizando..." : "Cifrando y guardando..."
+    );
+
     try {
-      const loadedData = await documentService.loadDocumentForEditing(
-        this.documentId
-      );
-      this.template = loadedData.template;
-      this.initialFormData = loadedData.formData;
-      this.documentMetadata = loadedData.metadata;
-      this.render();
-      this.setupEventListeners();
-      this.updateEditorState(false);
+      // Forzar evaluación de fórmulas matemáticas pendientes en inputs numéricos
+      document
+        .querySelectorAll(".math-input")
+        .forEach((inp) => this.evaluateMathInput(inp));
+
+      // Esperar un micro-tick para asegurar que el DOM y los inputs hidden de las tablas se actualicen
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Recolectar datos limpios del formulario
+      const formData = this.collectFormData();
+
+      let result;
+      if (this.isEditing) {
+        // Actualizar: El servicio se encargará de cifrar con la llave activa
+        result = await documentService.updateDocument(
+          this.documentId,
+          this.template,
+          formData
+        );
+      } else {
+        // Crear: El servicio generará un nuevo documento cifrado
+        result = await documentService.createDocument(this.template, formData);
+      }
+
+      // Notificar éxito al padre
+      if (this.onSaveSuccess) this.onSaveSuccess(result);
     } catch (error) {
-      console.error(error);
-      this.renderError(
-        "No se pudo descifrar el documento. Verifica tu contraseña."
-      );
+      console.error("Error al guardar:", error);
+      alert("Error al procesar el guardado: " + error.message);
+      this.updateEditorState(false);
     }
   }
 
@@ -436,84 +512,6 @@ export class DocumentEditor {
         }
       } catch (e) {}
     }
-  }
-
-  async handleSave() {
-    if (this.isSubmitting) return;
-    const form = document.querySelector(`form[id^="templateForm_"]`);
-    if (form && !form.checkValidity()) {
-      form.reportValidity();
-      return;
-    }
-
-    this.updateEditorState(
-      true,
-      this.isEditing ? "Guardando cambios..." : "Encriptando y guardando..."
-    );
-
-    try {
-      document
-        .querySelectorAll(".math-input")
-        .forEach((inp) => this.evaluateMathInput(inp));
-      await new Promise((r) => setTimeout(r, 100)); // Breve pausa para UI update
-
-      const formData = this.collectFormData();
-      const result = this.isEditing
-        ? await documentService.updateDocument(
-            this.documentId,
-            this.template,
-            formData
-          )
-        : await documentService.createDocument(this.template, formData);
-
-      if (this.onSaveSuccess) this.onSaveSuccess(result);
-    } catch (error) {
-      console.error(error);
-      alert("Error: " + error.message);
-      this.updateEditorState(false);
-    }
-  }
-
-  // collectFormData se mantiene igual...
-  collectFormData() {
-    const formData = {};
-    this.template.fields.forEach((field) => {
-      if (field.type === "url") {
-        const urlInput = document.getElementById(`${field.id}_url`);
-        const textInput = document.getElementById(`${field.id}_text`);
-
-        if (urlInput) {
-          // Guardamos un objeto con ambas propiedades
-          formData[field.id] = {
-            url: urlInput.value.trim(),
-            // Si no hay texto, guardamos cadena vacía (el viewer lo resolverá)
-            text: textInput ? textInput.value.trim() : "",
-          };
-        }
-        return; // Importante: salir aquí para no procesarlo abajo como input normal
-      }
-      const input = document.getElementById(field.id);
-      if (input) {
-        if (field.type === "boolean") formData[field.id] = input.checked;
-        else if (["number", "currency", "percentage"].includes(field.type)) {
-          let val = input.value;
-          try {
-            if (/[\+\-\*\/]/.test(val))
-              val = new Function('"use strict";return (' + val + ")")();
-          } catch (e) {}
-          formData[field.id] = val === "" || isNaN(val) ? null : Number(val);
-        } else if (field.type === "table") {
-          try {
-            formData[field.id] = JSON.parse(input.value || "[]");
-          } catch (e) {
-            formData[field.id] = [];
-          }
-        } else {
-          formData[field.id] = input.value;
-        }
-      }
-    });
-    return formData;
   }
 
   updateEditorState(isLoading, message = null) {

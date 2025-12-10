@@ -25,37 +25,78 @@ export class DocumentViewer {
 
   async load() {
     this.renderLoading();
+
+    // 1. VERIFICACIÓN DE SEGURIDAD (La Muralla)
+    // Si el servicio de cifrado no tiene la llave maestra en memoria...
+    if (!encryptionService.isReady()) {
+      // Delegamos al orquestador global (app.js) para que pida la contraseña
+      if (window.app && window.app.requireEncryption) {
+        window.app.requireEncryption(() => {
+          // Callback: Si el usuario pone la clave correcta, reintentamos cargar
+          this.load();
+        });
+        return; // Detenemos la ejecución aquí
+      } else {
+        // Fallback por si algo crítico falló en la app
+        this.renderError(
+          "El sistema de cifrado no está disponible. Por favor recarga la página."
+        );
+        return;
+      }
+    }
+
     try {
+      // 2. OBTENER EL DOCUMENTO CIFRADO
       this.document = await documentService.getDocumentById(this.docId);
+
+      // 3. OBTENER LA PLANTILLA (Para saber qué campos mostrar)
       this.template = await templateService.getTemplateById(
         this.document.templateId
       );
 
-      if (!this.template)
-        throw new Error("La plantilla original ya no existe.");
-      if (!encryptionService.isReady())
-        throw new Error("Cifrado no inicializado.");
+      if (!this.template) {
+        throw new Error(
+          "La plantilla asociada a este documento ya no existe o fue eliminada."
+        );
+      }
 
+      // 4. DESCIFRAR EL CONTENIDO
+      // Aquí usamos la llave maestra que ya validamos en el paso 1
       this.decryptedData = await encryptionService.decryptDocument({
         content: this.document.encryptedContent,
         metadata: this.document.encryptionMetadata,
       });
 
-      // Inicializar estados de tablas
-      this.template.fields.forEach((f) => {
-        if (f.type === "table") {
-          this.tableStates[f.id] = {
-            search: "",
-            sortCol: null,
-            sortDir: "asc",
-          };
-        }
-      });
+      // 5. INICIALIZAR ESTADOS DE TABLAS (Para Búsqueda y Ordenamiento)
+      // Recorremos los campos para preparar el estado de las tablas si las hay
+      if (this.template.fields) {
+        this.template.fields.forEach((f) => {
+          if (f.type === "table") {
+            // Inicializamos el estado solo si no existe
+            if (!this.tableStates[f.id]) {
+              this.tableStates[f.id] = {
+                search: "",
+                sortCol: null,
+                sortDir: "asc",
+              };
+            }
+          }
+        });
+      }
 
+      // 6. RENDERIZAR LA VISTA
       this.renderContent();
     } catch (error) {
-      console.error("Error:", error);
-      this.renderError(error.message);
+      console.error("Error al cargar documento:", error);
+
+      // Manejo específico de errores de descifrado (clave incorrecta o datos corruptos)
+      let msg = error.message || "Error desconocido al cargar.";
+      if (error.message.includes("decrypt")) {
+        msg =
+          "No se pudo descifrar el documento. Es posible que la contraseña maestra haya cambiado o los datos estén corruptos.";
+      }
+
+      this.renderError(msg);
     }
   }
 
