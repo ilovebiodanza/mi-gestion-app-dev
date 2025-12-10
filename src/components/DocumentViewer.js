@@ -85,7 +85,6 @@ export class DocumentViewer {
         return `<span class="font-mono text-slate-700">${value}%</span>`;
 
       case "secret":
-        // Efecto "Blur" interactivo para secretos
         if (isTableContext)
           return '<span class="text-xs text-slate-400 font-mono">••••••</span>';
         return `
@@ -147,7 +146,7 @@ export class DocumentViewer {
 
     const fieldsHtml = this.template.fields
       .map((field, index) => {
-        if (index === 0) return ""; // Título ya mostrado arriba
+        if (index === 0) return "";
         const value = this.decryptedData[field.id];
 
         if (field.type === "table") return this.renderTableField(field, value);
@@ -167,21 +166,30 @@ export class DocumentViewer {
       .join("");
 
     container.innerHTML = `
-      <div class="flex justify-between items-center mb-6 px-2 no-print">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2 no-print">
+         
          <button id="backBtn" class="flex items-center text-slate-500 hover:text-primary transition-colors font-medium">
             <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-2 shadow-sm">
                 <i class="fas fa-arrow-left text-sm"></i>
             </div>
-            Volver a la Bóveda
+            <span>Volver</span>
          </button>
          
-         <div class="flex gap-2">
+         <div class="flex items-center gap-2 self-end sm:self-auto bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+            <button id="whatsappDocBtn" class="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Copiar para WhatsApp">
+               <i class="fab fa-whatsapp text-lg"></i>
+            </button>
+            <button id="pdfDocBtn" class="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" title="Imprimir / PDF">
+               <i class="fas fa-print text-lg"></i>
+            </button>
+
+            <div class="h-6 w-px bg-slate-200 mx-1"></div>
+
             <button id="deleteDocBtn" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
                <i class="far fa-trash-alt text-lg"></i>
             </button>
-            <div class="h-8 w-px bg-slate-200 my-auto mx-1"></div>
-            <button id="editDocBtn" class="flex items-center px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg shadow-md hover:shadow-lg transition-all text-sm font-medium">
-               <i class="fas fa-pen mr-2 text-xs"></i> Editar
+            <button id="editDocBtn" class="flex items-center px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg shadow-sm transition-all text-sm font-medium ml-1">
+               <i class="fas fa-pen mr-2 text-xs"></i> <span>Editar</span>
             </button>
          </div>
       </div>
@@ -210,14 +218,6 @@ export class DocumentViewer {
                      <span><i class="far fa-clock mr-1"></i> ${updatedAt}</span>
                   </div>
                </div>
-            </div>
-            <div class="hidden sm:flex space-x-2 no-print">
-               <button id="whatsappDocBtn" class="text-slate-400 hover:text-green-500 p-2 transition" title="Copiar para WhatsApp">
-                  <i class="fab fa-whatsapp text-xl"></i>
-               </button>
-               <button id="pdfDocBtn" class="text-slate-400 hover:text-red-500 p-2 transition" title="Imprimir / PDF">
-                  <i class="fas fa-print text-xl"></i>
-               </button>
             </div>
           </div>
         </div>
@@ -327,9 +327,6 @@ export class DocumentViewer {
     `;
   }
 
-  // ... (setupContentListeners, openRowModal, handleCopyToWhatsApp - Se mantienen con lógica similar pero clases actualizadas si es necesario)
-  // Nota: He simplificado la repetición de lógica standard. Aquí los listeners actualizados para la nueva UI.
-
   setupContentListeners() {
     // Botones globales
     ["closeViewerBtn", "backBtn"].forEach((id) =>
@@ -350,7 +347,7 @@ export class DocumentViewer {
       .getElementById("whatsappDocBtn")
       ?.addEventListener("click", () => this.handleCopyToWhatsApp());
 
-    // Delegación de eventos para interactividad
+    // Delegación de eventos
     const container = document.getElementById("documentViewerPlaceholder");
     container.addEventListener("click", (e) => {
       // Toggle Secret
@@ -428,7 +425,6 @@ export class DocumentViewer {
     document.getElementById("rowDetailModal").classList.remove("hidden");
   }
 
-  // ... (Logic para renderLoading, renderError, handleDelete, handleEdit se mantiene igual pero usando las nuevas clases si imprimen HTML)
   renderLoading() {
     document.getElementById(
       "documentViewerPlaceholder"
@@ -444,7 +440,6 @@ export class DocumentViewer {
       ?.addEventListener("click", () => this.onBack());
   }
 
-  // handleCopyToWhatsApp y handleDelete se mantienen iguales logicamente
   async handleDelete() {
     if (!confirm("¿Estás seguro de eliminar este documento permanentemente?"))
       return;
@@ -465,7 +460,6 @@ export class DocumentViewer {
     });
   }
 
-  // Incluimos handleCopyToWhatsApp completo para que no se pierda
   async handleCopyToWhatsApp() {
     try {
       let waText = `*${this.document.metadata.title}*\n_${this.template.name}_\n\n`;
@@ -495,11 +489,12 @@ export class DocumentViewer {
           )}\n`;
         }
       });
+      waText += `\n_Enviado desde Mi Gestión_`;
       await navigator.clipboard.writeText(waText);
       const btn = document.getElementById("whatsappDocBtn");
-      btn.innerHTML = '<i class="fas fa-check text-green-500"></i>';
+      btn.innerHTML = '<i class="fas fa-check text-green-500 text-lg"></i>';
       setTimeout(
-        () => (btn.innerHTML = '<i class="fab fa-whatsapp text-xl"></i>'),
+        () => (btn.innerHTML = '<i class="fab fa-whatsapp text-lg"></i>'),
         2000
       );
     } catch (e) {
