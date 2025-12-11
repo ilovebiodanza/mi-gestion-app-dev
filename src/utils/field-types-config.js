@@ -98,6 +98,14 @@ const FIELD_TYPES = [
     icon: "fas fa-table",
     description: "Lista de ítems con columnas personalizadas.",
   },
+  // --- Estructurales ---
+  {
+    value: "separator",
+    label: "--- SEPARADOR / TÍTULO ---",
+    inputType: "separator",
+    icon: "fas fa-heading",
+    description: "Divisor visual para organizar secciones.",
+  },
 ];
 
 export const getFieldTypesConfig = () => FIELD_TYPES;

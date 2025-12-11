@@ -3,7 +3,7 @@
 import { documentService } from "../services/documents/index.js";
 import { templateService } from "../services/templates/index.js";
 import { encryptionService } from "../services/encryption/index.js";
-import { getFieldTypeLabel, getLocalCurrency } from "../utils/helpers.js";
+import { getLocalCurrency } from "../utils/helpers.js";
 
 export class DocumentViewer {
   constructor(docId, onBack) {
@@ -13,7 +13,7 @@ export class DocumentViewer {
     this.template = null;
     this.decryptedData = null;
     this.currencyConfig = getLocalCurrency();
-    this.tableStates = {}; // { fieldId: { search: '', sortCol: '', sortDir: 'asc' } }
+    this.tableStates = {};
   }
 
   render() {
@@ -23,7 +23,6 @@ export class DocumentViewer {
   async load() {
     this.renderLoading();
 
-    // Verificación seguridad
     if (!encryptionService.isReady()) {
       if (window.app && window.app.requireEncryption) {
         window.app.requireEncryption(() => this.load());
@@ -42,12 +41,10 @@ export class DocumentViewer {
       if (!this.template)
         throw new Error("La plantilla original ya no existe.");
 
-      // Descifrado
       this.decryptedData = await encryptionService.decryptDocument(
         this.document.encryptedContent
       );
 
-      // Init estados tablas
       this.template.fields.forEach((f) => {
         if (f.type === "table")
           this.tableStates[f.id] = {
@@ -78,20 +75,45 @@ export class DocumentViewer {
       minute: "2-digit",
     });
 
+    // --- GENERACIÓN DEL GRID DE CAMPOS ---
     const fieldsHtml = this.template.fields
       .map((field, index) => {
-        // El primer campo (título) ya se muestra en el header, pero lo mostramos igual si tiene valor
-        const value = this.decryptedData[field.id];
-        if (field.type === "table") return this.renderTableField(field, value);
+        // 1. Determinar si ocupa ancho completo (2 columnas) o normal (1 columna)
+        // Tipos anchos: Separador, Tabla, Texto Largo (textarea), URL
+        const isFullWidth = ["separator", "table", "text"].includes(field.type);
+        const spanClass = isFullWidth ? "md:col-span-2" : "md:col-span-1";
 
+        // 2. CASO ESPECIAL: SEPARADOR
+        if (field.type === "separator") {
+          return `
+            <div class="${spanClass} mt-6 mb-2 border-b border-slate-200 pb-2 flex items-center gap-3">
+                <div class="w-1.5 h-6 bg-gradient-to-b from-primary to-secondary rounded-full"></div>
+                <h3 class="text-lg font-bold text-slate-800 tracking-tight">${field.label}</h3>
+            </div>
+          `;
+        }
+
+        // 3. Renderizar valor
+        const value = this.decryptedData[field.id];
+
+        // Caso Tabla
+        if (field.type === "table") {
+          return `<div class="${spanClass}">${this.renderTableField(
+            field,
+            value
+          )}</div>`;
+        }
+
+        // Caso Campos Normales
         const displayValue = this.renderFieldValue(field.type, value);
 
+        // Estilo de "Caja" (Label arriba, valor abajo) para el Grid
         return `
-        <div class="group py-4 px-6 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-6">
-          <dt class="sm:col-span-4 text-sm font-bold text-slate-500 flex items-center">
+        <div class="${spanClass} bg-slate-50/50 rounded-xl p-4 border border-slate-100 hover:bg-slate-50 hover:shadow-sm transition-all group">
+          <dt class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-2">
              ${field.label}
           </dt>
-          <dd class="sm:col-span-8 text-sm text-slate-800 break-words leading-relaxed font-medium">
+          <dd class="text-sm text-slate-800 break-words leading-relaxed font-medium">
              ${displayValue}
           </dd>
         </div>
@@ -109,7 +131,7 @@ export class DocumentViewer {
          </button>
          
          <div class="flex items-center gap-2 self-end sm:self-auto bg-white p-1.5 rounded-xl shadow-sm border border-slate-200">
-            <button id="whatsappDocBtn" class="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Copiar para WhatsApp">
+            <button id="whatsappDocBtn" class="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="WhatsApp">
                <i class="fab fa-whatsapp text-lg"></i>
             </button>
             <button id="pdfDocBtn" class="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" title="Imprimir / PDF">
@@ -152,8 +174,8 @@ export class DocumentViewer {
              </div>
         </div>
 
-        <div class="py-2">
-           <dl>
+        <div class="p-6 sm:p-8">
+           <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
               ${fieldsHtml}
            </dl>
         </div>
@@ -185,7 +207,6 @@ export class DocumentViewer {
     this.setupContentListeners();
   }
 
-  // --- RENDERIZADO DE VALORES ---
   renderFieldValue(type, value, isTableContext = false) {
     if (
       value === undefined ||
@@ -226,14 +247,14 @@ export class DocumentViewer {
         }
         return `
             <div class="flex items-center gap-2">
-              <div class="relative group overflow-hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-all hover:border-indigo-200 hover:shadow-sm">
+              <div class="relative group overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2 transition-all hover:border-indigo-200 hover:shadow-sm w-full">
                  <span class="secret-mask filter blur-[5px] select-none transition-all duration-300 group-hover:blur-none font-mono text-sm text-slate-800 tracking-wider">••••••••••••••</span>
                  <span class="secret-revealed hidden font-mono text-sm text-slate-800 select-all font-bold tracking-wide">${value}</span>
               </div>
-              <button class="toggle-secret-btn w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Revelar">
+              <button class="toggle-secret-btn w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors bg-white border border-slate-200" title="Revelar">
                 <i class="fas fa-eye"></i>
               </button>
-              <button class="copy-btn w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors" data-value="${value}" title="Copiar">
+              <button class="copy-btn w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors bg-white border border-slate-200" data-value="${value}" title="Copiar">
                 <i class="far fa-copy"></i>
               </button>
             </div>`;
@@ -262,97 +283,10 @@ export class DocumentViewer {
     }
   }
 
-  // --- LÓGICA DE TABLAS MEJORADA ---
-
-  getProcessedRows(field, rows) {
-    const state = this.tableStates[field.id] || {
-      search: "",
-      sortCol: null,
-      sortDir: "asc",
-    };
-    let processed = [...rows];
-
-    // 1. Filtrado
-    if (state.search) {
-      const term = state.search.toLowerCase();
-      const columnsToCheck = field.columns.slice(0, 3);
-      processed = processed.filter((row) => {
-        return columnsToCheck.some((col) => {
-          let val = row[col.id];
-          if (typeof val === "object" && val !== null) {
-            val = val.text || val.url || "";
-          }
-          return String(val || "")
-            .toLowerCase()
-            .includes(term);
-        });
-      });
-    }
-
-    // 2. Ordenamiento
-    if (state.sortCol) {
-      const colId = state.sortCol;
-      const colDef = field.columns.find((c) => c.id === colId);
-      processed.sort((a, b) => {
-        let valA = a[colId];
-        let valB = b[colId];
-        if (valA === undefined || valA === null) valA = "";
-        if (valB === undefined || valB === null) valB = "";
-        if (typeof valA === "object") valA = valA.text || valA.url || "";
-        if (typeof valB === "object") valB = valB.text || valB.url || "";
-
-        if (
-          colDef &&
-          ["number", "currency", "percentage"].includes(colDef.type)
-        ) {
-          return state.sortDir === "asc" ? valA - valB : valB - valA;
-        }
-        return state.sortDir === "asc"
-          ? String(valA).localeCompare(String(valB))
-          : String(valB).localeCompare(String(valA));
-      });
-    }
-    return processed;
-  }
-
-  generateTableBodyHtml(field, rows) {
-    const isComplex = field.columns.length > 3;
-    const displayColumns = isComplex
-      ? field.columns.slice(0, 3)
-      : field.columns;
-
-    if (rows.length === 0) {
-      return `<tr><td colspan="${
-        displayColumns.length + (isComplex ? 1 : 0)
-      }" class="py-8 text-center text-slate-400 text-sm">No se encontraron registros</td></tr>`;
-    }
-
-    return rows
-      .map((row, idx) => {
-        const cells = displayColumns
-          .map(
-            (c) =>
-              `<td class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">${this.renderFieldValue(
-                c.type,
-                row[c.id],
-                true
-              )}</td>`
-          )
-          .join("");
-
-        const actionBtn = isComplex
-          ? `<td class="px-4 py-3 text-right"><button class="view-row-btn text-primary hover:bg-blue-50 p-1.5 rounded transition" data-field-id="${field.id}" data-row-index="${idx}"><i class="fas fa-eye"></i></button></td>`
-          : "";
-
-        return `<tr class="hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 even:bg-slate-50/50">${cells}${actionBtn}</tr>`;
-      })
-      .join("");
-  }
-
   renderTableField(field, value) {
     const rows = Array.isArray(value) ? value : [];
     if (rows.length === 0)
-      return `<div class="my-4 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 text-center text-xs text-slate-400">Tabla vacía</div>`;
+      return `<div class="p-6 border border-dashed border-slate-200 rounded-xl bg-slate-50 text-center text-xs text-slate-400 flex flex-col items-center gap-2"><i class="fas fa-table text-xl opacity-20"></i>Tabla vacía</div>`;
 
     const state = this.tableStates[field.id] || {
       search: "",
@@ -400,14 +334,16 @@ export class DocumentViewer {
       .join("");
 
     return `
-      <div class="col-span-full mt-4 mb-6">
-         <div class="flex items-center justify-between mb-2">
-             <label class="text-sm font-bold text-slate-500">${
-               field.label
-             } <span class="ml-2 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs">${
+      <div class="col-span-full mt-2 mb-2">
+         <div class="flex items-center justify-between mb-3">
+             <label class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-2">
+                <i class="fas fa-table"></i> ${
+                  field.label
+                } <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[10px]">${
       rows.length
-    }</span></label>
-             <input type="text" class="table-search-input text-xs border border-slate-200 rounded-lg px-2 py-1 w-40 focus:ring-2 focus:ring-primary/20 outline-none" placeholder="Buscar..." data-field-id="${
+    }</span>
+             </label>
+             <input type="text" class="table-search-input text-xs border border-slate-200 rounded-lg px-2 py-1.5 w-40 focus:ring-2 focus:ring-primary/20 outline-none bg-slate-50" placeholder="Buscar..." data-field-id="${
                field.id
              }">
          </div>
@@ -422,8 +358,54 @@ export class DocumentViewer {
       </div>`;
   }
 
+  // --- Helpers Lógica ---
+  getProcessedRows(field, rows) {
+    const state = this.tableStates[field.id] || {
+      search: "",
+      sortCol: null,
+      sortDir: "asc",
+    };
+    let processed = [...rows];
+    if (state.search) {
+      const term = state.search.toLowerCase();
+      const columnsToCheck = field.columns.slice(0, 3);
+      processed = processed.filter((row) =>
+        columnsToCheck.some((col) => {
+          let val = row[col.id];
+          if (typeof val === "object" && val !== null)
+            val = val.text || val.url || "";
+          return String(val || "")
+            .toLowerCase()
+            .includes(term);
+        })
+      );
+    }
+    if (state.sortCol) {
+      const colId = state.sortCol;
+      const colDef = field.columns.find((c) => c.id === colId);
+      processed.sort((a, b) => {
+        let valA = a[colId];
+        let valB = b[colId];
+        if (valA === undefined || valA === null) valA = "";
+        if (valB === undefined || valB === null) valB = "";
+        if (typeof valA === "object") valA = valA.text || valA.url || "";
+        if (typeof valB === "object") valB = valB.text || valB.url || "";
+        if (
+          colDef &&
+          ["number", "currency", "percentage"].includes(colDef.type)
+        ) {
+          return state.sortDir === "asc" ? valA - valB : valB - valA;
+        }
+        return state.sortDir === "asc"
+          ? String(valA).localeCompare(String(valB))
+          : String(valB).localeCompare(String(valA));
+      });
+    }
+    return processed;
+  }
+
   setupContentListeners() {
-    ["closeViewerBtn", "backBtn"].forEach((id) =>
+    ["backBtn"].forEach((id) =>
       document
         .getElementById(id)
         ?.addEventListener("click", () => this.onBack())
@@ -440,18 +422,14 @@ export class DocumentViewer {
     document
       .getElementById("whatsappDocBtn")
       ?.addEventListener("click", () => this.handleCopyToWhatsApp());
-
     const container = document.getElementById("documentViewerPlaceholder");
-
     container.querySelectorAll(".table-search-input").forEach((input) => {
       input.addEventListener("input", (e) => {
         const fieldId = e.target.dataset.fieldId;
-        const query = e.target.value;
-        this.tableStates[fieldId].search = query;
+        this.tableStates[fieldId].search = e.target.value;
         this.updateTableUI(fieldId);
       });
     });
-
     container.addEventListener("click", (e) => {
       const header = e.target.closest(".table-header-sort");
       if (header) {
@@ -466,7 +444,6 @@ export class DocumentViewer {
         }
         this.refreshTableFieldHTML(fieldId);
       }
-
       const toggleBtn = e.target.closest(".toggle-secret-btn");
       if (toggleBtn) {
         const wrapper = toggleBtn.parentElement;
@@ -499,7 +476,6 @@ export class DocumentViewer {
           parseInt(viewRowBtn.dataset.rowIndex)
         );
     });
-
     const modal = document.getElementById("rowDetailModal");
     const closeModal = () => modal.classList.add("hidden");
     modal
@@ -517,18 +493,20 @@ export class DocumentViewer {
     const tbody = document.getElementById(`tbody-${fieldId}`);
     if (tbody) tbody.innerHTML = this.generateTableBodyHtml(field, processed);
   }
-
+  generateTableBodyHtml(field, rows) {
+    return this.renderTableField(field, rows).match(/<tbody>(.*?)<\/tbody>/)[1];
+  }
   refreshTableFieldHTML(fieldId) {
     const field = this.template.fields.find((f) => f.id === fieldId);
     const rows = this.decryptedData[fieldId] || [];
     const table = document.getElementById(`table-${fieldId}`);
     if (table) {
-      const containerDiv = table.closest(".py-6");
+      const containerDiv = table.closest(".col-span-full");
       if (containerDiv) {
         containerDiv.outerHTML = this.renderTableField(field, rows);
         const newContainer = document
           .getElementById(`table-${fieldId}`)
-          .closest(".py-6");
+          .closest(".col-span-full");
         const input = newContainer.querySelector(".table-search-input");
         if (input) {
           input.addEventListener("input", (e) => {
@@ -539,40 +517,31 @@ export class DocumentViewer {
       }
     }
   }
-
   openRowModal(fieldId, rowIndex) {
     const field = this.template.fields.find((f) => f.id === fieldId);
     if (!field) return;
     const rowsOriginal = this.decryptedData[fieldId] || [];
     const rowsProcessed = this.getProcessedRows(field, rowsOriginal);
     const rowData = rowsProcessed[rowIndex];
-
     const content = field.columns
       .map(
-        (col) => `
-        <div class="py-3 border-b border-slate-100 last:border-0">
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">${
-              col.label || col.name
-            }</p>
-            <div class="text-slate-800 text-sm break-words">${this.renderFieldValue(
-              col.type,
-              rowData[col.id]
-            )}</div>
-        </div>
-    `
+        (col) =>
+          `<div class="py-3 border-b border-slate-100 last:border-0"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">${
+            col.label || col.name
+          }</p><div class="text-slate-800 text-sm break-words">${this.renderFieldValue(
+            col.type,
+            rowData[col.id]
+          )}</div></div>`
       )
       .join("");
-
     document.getElementById("rowDetailContent").innerHTML = content;
     document.getElementById("rowDetailModal").classList.remove("hidden");
   }
-
   renderLoading() {
     document.getElementById(
       "documentViewerPlaceholder"
     ).innerHTML = `<div class="flex flex-col items-center justify-center py-24"><div class="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-primary mb-4"></div><p class="text-slate-400 animate-pulse">Desencriptando documento...</p></div>`;
   }
-
   renderError(msg) {
     document.getElementById(
       "documentViewerPlaceholder"
@@ -581,7 +550,6 @@ export class DocumentViewer {
       .getElementById("backBtn")
       ?.addEventListener("click", () => this.onBack());
   }
-
   async handleDelete() {
     if (!confirm("¿Estás seguro de eliminar este documento permanentemente?"))
       return;
@@ -592,7 +560,6 @@ export class DocumentViewer {
       alert(error.message);
     }
   }
-
   handleEdit() {
     this.onBack({
       documentId: this.docId,
@@ -601,7 +568,6 @@ export class DocumentViewer {
       metadata: this.document.metadata,
     });
   }
-
   async handleCopyToWhatsApp() {
     try {
       let waText = `*${this.document.metadata.title}*\n_${this.template.name}_\n\n`;
@@ -643,7 +609,6 @@ export class DocumentViewer {
       console.error(e);
     }
   }
-
   getFormattedValueForText(type, value) {
     if (value === undefined || value === null || value === "") return "_N/A_";
     if (type === "boolean") return value ? "Sí" : "No";

@@ -4,7 +4,7 @@ import { getFieldTypesConfig } from "../utils/field-types-config.js";
 
 export class TemplateForm {
   constructor(handlers) {
-    this.handlers = handlers; // { onSave, onCancel }
+    this.handlers = handlers;
     this.activeFieldItem = null;
     this.mainSortable = null;
     this.modalSortable = null;
@@ -163,26 +163,39 @@ export class TemplateForm {
     const fieldId =
       field?.id || generateFieldId(field?.label || `campo_${index + 1}`, index);
     const fieldTypes = getFieldTypesConfig();
+
+    // Lógica para Separador
+    const isSeparator = field?.type === "separator";
+    const cardBg = isSeparator
+      ? "bg-slate-50 border-slate-300 shadow-inner"
+      : "bg-white border-slate-200 hover:shadow-lg hover:border-primary/50";
+
     const columnsCount =
       field?.type === "table" && field.columns ? field.columns.length : 0;
     const columnsData =
       field?.type === "table" ? JSON.stringify(field.columns) : "[]";
 
     return `
-    <div class="field-item group relative bg-white border border-slate-200 rounded-2xl p-1 transition-all duration-300 hover:shadow-lg hover:border-primary/50 hover:z-10" data-field-id="${fieldId}">
+    <div class="field-item group relative ${cardBg} border rounded-2xl p-1 transition-all duration-300 hover:z-10" data-field-id="${fieldId}">
       <div class="flex items-stretch">
-        <div class="w-10 flex flex-col items-center justify-center text-slate-300 cursor-grab active:cursor-grabbing hover:text-indigo-500 drag-handle rounded-l-xl bg-slate-50 border-r border-slate-100 transition-colors">
+        <div class="w-10 flex flex-col items-center justify-center text-slate-300 cursor-grab active:cursor-grabbing hover:text-indigo-500 drag-handle rounded-l-xl border-r border-slate-200/50 transition-colors">
             <i class="fas fa-grip-vertical"></i>
         </div>
 
         <div class="flex-grow p-4">
             <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-3">
                 <div class="md:col-span-7">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">Etiqueta del Campo</label>
-                    <input type="text" class="field-label w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition font-semibold text-slate-700 text-sm" 
-                           value="${
-                             field?.label || ""
-                           }" placeholder="Ej: Usuario, Contraseña..." required />
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1 ml-1">
+                        ${
+                          isSeparator
+                            ? "Título de la Sección"
+                            : "Etiqueta del Campo"
+                        }
+                    </label>
+                    <input type="text" class="field-label w-full px-3 py-2 bg-white/60 border border-slate-200 rounded-lg focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition font-semibold text-slate-700 text-sm" 
+                           value="${field?.label || ""}" placeholder="${
+      isSeparator ? "Ej: Datos Bancarios" : "Ej: Usuario"
+    }" required />
                 </div>
                 
                 <div class="md:col-span-5">
@@ -203,7 +216,7 @@ export class TemplateForm {
                 </div>
             </div>
 
-            <div class="space-y-3">
+            <div class="space-y-3 ${isSeparator ? "hidden" : ""}">
                 <div class="options-input-group ${
                   field?.type === "select" ? "animate-fade-in" : "hidden"
                 }">
@@ -241,6 +254,14 @@ export class TemplateForm {
                     </label>
                 </div>
             </div>
+            
+            <div class="${
+              isSeparator ? "block" : "hidden"
+            } pt-2 pb-1 text-center opacity-60">
+                <div class="h-px bg-slate-300 w-full flex items-center justify-center">
+                    <span class="bg-slate-200 px-3 py-0.5 rounded text-[10px] text-slate-500 font-bold uppercase tracking-widest">Divisor Visual</span>
+                </div>
+            </div>
         </div>
 
         <button type="button" class="remove-field absolute -top-3 -right-3 w-8 h-8 bg-white text-slate-300 hover:text-white hover:bg-red-500 border border-slate-200 hover:border-red-500 rounded-full shadow-md flex items-center justify-center transition-all z-20 opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100">
@@ -254,9 +275,8 @@ export class TemplateForm {
     return `
       <div id="columnsModal" class="fixed inset-0 z-[60] hidden">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-fade-in" id="closeModalBackdrop"></div>
-        
         <div class="relative w-full h-full flex items-center justify-center p-4">
-            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] relative animate-fade-in overflow-hidden ring-1 ring-slate-900/5">
+            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[85vh] relative animate-fade-in-up overflow-hidden ring-1 ring-slate-900/5">
                 
                 <div class="px-8 py-6 bg-white border-b border-slate-100 flex justify-between items-center z-10">
                     <div class="flex items-center gap-4">
@@ -273,13 +293,11 @@ export class TemplateForm {
                 
                 <div class="p-8 overflow-y-auto flex-grow bg-slate-50/50 custom-scrollbar">
                     <div id="modalColumnsContainer" class="space-y-3"></div>
-                    
                     <div id="noColumnsMessage" class="flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-300 rounded-2xl bg-white mt-2">
                          <div class="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-2"><i class="fas fa-columns"></i></div>
                         <p class="text-slate-500 font-medium text-sm">No hay columnas definidas</p>
                         <button type="button" id="addColBtnEmpty" class="text-indigo-600 text-sm font-bold hover:underline mt-1">Agregar la primera</button>
                     </div>
-
                     <button type="button" id="addColBtn" class="mt-6 w-full py-3.5 border-2 border-dashed border-indigo-200 bg-indigo-50/40 text-indigo-600 rounded-xl hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-sm transition flex items-center justify-center font-bold text-sm gap-2">
                         <i class="fas fa-plus-circle"></i> Agregar Nueva Columna
                     </button>
@@ -296,7 +314,6 @@ export class TemplateForm {
       </div>`;
   }
 
-  // --- LÓGICA (Se mantiene igual, solo ajustando selectores si cambió alguna clase) ---
   setupListeners(container) {
     const catSelect = container.querySelector("#templateCategory");
     const iconInput = container.querySelector("#templateIcon");
@@ -315,6 +332,7 @@ export class TemplateForm {
 
     const fieldsContainer = container.querySelector("#fieldsContainer");
     if (fieldsContainer) {
+      // 1. Clicks (Borrar, Configurar tabla)
       fieldsContainer.addEventListener("click", (e) => {
         if (e.target.closest(".remove-field")) {
           e.target.closest(".field-item").remove();
@@ -325,23 +343,24 @@ export class TemplateForm {
         }
       });
 
+      // 2. Cambios (Selector de tipo)
       fieldsContainer.addEventListener("change", (e) => {
         if (e.target.classList.contains("field-type")) {
           const item = e.target.closest(".field-item");
-          const type = e.target.value;
-          item
-            .querySelector(".table-config-group")
-            .classList.toggle("hidden", type !== "table");
-          item
-            .querySelector(".table-config-group")
-            .classList.toggle("animate-fade-in", type === "table");
+          const currentLabel = item.querySelector(".field-label").value;
+          const currentId = item.dataset.fieldId;
+          const newType = e.target.value;
 
-          item
-            .querySelector(".options-input-group")
-            .classList.toggle("hidden", type !== "select");
-          item
-            .querySelector(".options-input-group")
-            .classList.toggle("animate-fade-in", type === "select");
+          const tempField = {
+            id: currentId,
+            label: currentLabel,
+            type: newType,
+            options: [],
+            columns: [],
+            required: false,
+          };
+
+          item.outerHTML = this.renderFieldItem(tempField);
         }
       });
     }
@@ -367,8 +386,8 @@ export class TemplateForm {
     const config = {
       animation: 200,
       handle: ".drag-handle",
-      ghostClass: "sortable-ghost", // Definida en CSS global
-      dragClass: "sortable-drag", // Definida en CSS global
+      ghostClass: "sortable-ghost",
+      dragClass: "sortable-drag",
       forceFallback: true,
       onEnd: () => {},
     };
@@ -399,7 +418,6 @@ export class TemplateForm {
     const close = () => {
       modal.classList.add("hidden");
     };
-
     modal.querySelector("#closeModalTop").onclick = close;
     modal.querySelector("#cancelModalBtn").onclick = close;
     modal.querySelector("#closeModalBackdrop").onclick = close;
@@ -408,17 +426,14 @@ export class TemplateForm {
       const c = modal.querySelector("#modalColumnsContainer");
       const count = c.querySelectorAll(".field-item").length;
       c.insertAdjacentHTML("beforeend", this.renderFieldItem(null, count));
-
-      // Limpiar opciones no válidas para columnas
       const newItem = c.lastElementChild;
+
       const select = newItem.querySelector(".field-type");
       [...select.options].forEach((opt) => {
-        if (opt.value === "table") opt.remove();
+        if (opt.value === "table" || opt.value === "separator") opt.remove(); // No separadores en tablas
       });
-      // Ajuste visual para el modal (quitar padding extra)
       newItem.classList.remove("p-1");
       newItem.classList.add("p-0", "border-slate-200");
-
       modal.querySelector("#noColumnsMessage").classList.add("hidden");
     };
 
@@ -436,7 +451,6 @@ export class TemplateForm {
       }
     };
 
-    // Logic for select type in modal
     mc.onchange = (e) => {
       if (e.target.classList.contains("field-type")) {
         const item = e.target.closest(".field-item");
@@ -471,13 +485,12 @@ export class TemplateForm {
     cols.forEach((col, i) => {
       container.insertAdjacentHTML("beforeend", this.renderFieldItem(col, i));
       const el = container.lastElementChild;
-      // Ajustes visuales para items dentro del modal
       el.classList.remove("p-1");
       el.classList.add("p-0");
 
       const select = el.querySelector(".field-type");
       [...select.options].forEach((opt) => {
-        if (opt.value === "table") opt.remove();
+        if (opt.value === "table" || opt.value === "separator") opt.remove();
       });
 
       if (col.type === "select")
@@ -485,7 +498,6 @@ export class TemplateForm {
     });
 
     this.initSortable(container, "modal");
-
     modal
       .querySelector("#noColumnsMessage")
       .classList.toggle("hidden", cols.length > 0);
@@ -551,7 +563,6 @@ export class TemplateForm {
       };
       this.handlers.onSave(data);
     } catch (e) {
-      // Usar un toast sería ideal, por ahora un alert limpio
       alert(e.message);
     }
   }
