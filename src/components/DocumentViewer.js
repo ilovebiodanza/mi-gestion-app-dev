@@ -13,32 +13,24 @@ export class DocumentViewer {
     this.template = null;
     this.decryptedData = null;
     this.currencyConfig = getLocalCurrency();
-
-    // Estado para manejar filtros y ordenamiento de tablas
-    this.tableStates = {};
+    this.tableStates = {}; // { fieldId: { search: '', sortCol: '', sortDir: 'asc' } }
   }
 
   render() {
-    return `<div id="documentViewerPlaceholder" class="animate-fade-in pb-12"></div>`;
+    return `<div id="documentViewerPlaceholder" class="animate-fade-in-up pb-16"></div>`;
   }
 
   async load() {
     this.renderLoading();
 
-    // VERIFICACIÓN DE SEGURIDAD
-    // Si la bóveda no está lista, pedimos la contraseña
+    // Verificación seguridad
     if (!encryptionService.isReady()) {
       if (window.app && window.app.requireEncryption) {
-        window.app.requireEncryption(() => {
-          this.load(); // Reintentar carga tras éxito
-        });
-        return;
-      } else {
-        this.renderError(
-          "Sistema de cifrado no disponible. Recarga la página."
-        );
+        window.app.requireEncryption(() => this.load());
         return;
       }
+      this.renderError("Sistema de cifrado no disponible.");
+      return;
     }
 
     try {
@@ -50,128 +42,25 @@ export class DocumentViewer {
       if (!this.template)
         throw new Error("La plantilla original ya no existe.");
 
-      console.log("🔓 Descifrando documento...", this.document.id);
-
-      // Pasamos el contenido cifrado al servicio
+      // Descifrado
       this.decryptedData = await encryptionService.decryptDocument(
         this.document.encryptedContent
       );
 
-      // Inicializar estados de tablas si las hay
+      // Init estados tablas
       this.template.fields.forEach((f) => {
-        if (f.type === "table") {
+        if (f.type === "table")
           this.tableStates[f.id] = {
             search: "",
             sortCol: null,
             sortDir: "asc",
           };
-        }
       });
 
       this.renderContent();
     } catch (error) {
-      console.error("Error:", error);
+      console.error(error);
       this.renderError(error.message);
-    }
-  }
-
-  // --- RENDERIZADO DE VALORES ---
-  renderFieldValue(type, value, isTableContext = false) {
-    if (
-      value === undefined ||
-      value === null ||
-      (typeof value === "string" && value.trim() === "")
-    ) {
-      return '<span class="text-slate-300 italic text-xs select-none">Vacío</span>';
-    }
-
-    switch (type) {
-      case "boolean":
-        return value
-          ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200"><i class="fas fa-check mr-1"></i> Sí</span>'
-          : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">No</span>';
-
-      case "date":
-        try {
-          const [year, month, day] = String(value).split("-").map(Number);
-          const dateObj = new Date(year, month - 1, day);
-          return `<span class="font-medium text-slate-700"><i class="far fa-calendar-alt mr-1.5 text-slate-400"></i>${new Intl.DateTimeFormat(
-            this.currencyConfig.locale,
-            { dateStyle: "medium" }
-          ).format(dateObj)}</span>`;
-        } catch (e) {
-          return value;
-        }
-
-      case "currency":
-        const numVal = Number(value);
-        if (isNaN(numVal)) return value;
-        const formatted = new Intl.NumberFormat(this.currencyConfig.locale, {
-          style: "currency",
-          currency: this.currencyConfig.codigo,
-        }).format(numVal);
-        return `<span class="font-mono font-medium text-slate-700 tracking-tight">${formatted}</span>`;
-
-      case "percentage":
-        return `<span class="font-mono text-slate-700">${value}%</span>`;
-
-      case "secret":
-        if (isTableContext) {
-          return `
-            <div class="relative group inline-flex items-center">
-              <span class="text-xs text-slate-400 font-mono filter blur-[3px] group-hover:blur-none transition-all duration-300 cursor-pointer select-none">••••••</span>
-              <span class="absolute inset-0 hidden group-hover:flex items-center justify-center bg-white/90 text-xs font-mono text-slate-800 shadow-sm border rounded px-1">${value}</span>
-            </div>`;
-        }
-        return `
-            <div class="relative group inline-flex items-center max-w-full">
-              <div class="secret-container relative overflow-hidden rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 transition-all duration-300 group-hover:border-primary/30 group-hover:shadow-sm">
-                 <span class="secret-mask filter blur-[4px] select-none transition-all duration-300 group-hover:blur-none font-mono text-sm text-slate-800" data-value="${value}">••••••••••••</span>
-                 <span class="secret-revealed hidden font-mono text-sm text-slate-800 select-all">${value}</span>
-              </div>
-              <button class="toggle-secret-btn ml-2 text-slate-400 hover:text-primary transition-colors p-1" title="Revelar permanentemente">
-                <i class="fas fa-eye"></i>
-              </button>
-              <button class="copy-btn ml-1 text-slate-400 hover:text-emerald-600 transition-colors p-1" data-value="${value}" title="Copiar">
-                <i class="far fa-copy"></i>
-              </button>
-            </div>`;
-
-      case "url":
-        let url = value;
-        let text = value;
-        if (typeof value === "object" && value !== null) {
-          url = value.url || "";
-          text = value.text || "";
-        } else {
-          url = String(value || "");
-        }
-
-        if (!url)
-          return '<span class="text-slate-300 italic text-xs">Sin enlace</span>';
-        const displayText = text.trim() !== "" ? text : url;
-        const finalDisplay =
-          isTableContext && displayText.length > 25
-            ? displayText.substring(0, 22) + "..."
-            : displayText;
-
-        return `
-            <a href="${url}" target="_blank" rel="noopener noreferrer" 
-               class="inline-flex items-center gap-1.5 text-primary hover:text-primary-hover hover:underline transition-colors group" 
-               title="${url}">
-                <i class="fas fa-external-link-alt text-[10px] opacity-70 group-hover:opacity-100"></i>
-                <span class="font-medium">${finalDisplay}</span>
-            </a>`;
-
-      case "text":
-        if (isTableContext)
-          return value.length > 30
-            ? `<span title="${value}">${value.substring(0, 30)}...</span>`
-            : value;
-        return `<div class="prose prose-sm max-w-none text-slate-700 bg-slate-50/50 p-4 rounded-xl border border-slate-100 leading-relaxed">${value}</div>`;
-
-      default:
-        return String(value);
     }
   }
 
@@ -191,18 +80,18 @@ export class DocumentViewer {
 
     const fieldsHtml = this.template.fields
       .map((field, index) => {
-        if (index === 0) return "";
+        // El primer campo (título) ya se muestra en el header, pero lo mostramos igual si tiene valor
         const value = this.decryptedData[field.id];
-
         if (field.type === "table") return this.renderTableField(field, value);
 
         const displayValue = this.renderFieldValue(field.type, value);
+
         return `
-        <div class="group py-4 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 hover:bg-slate-50/80 transition-colors rounded-lg">
-          <dt class="text-sm font-medium text-slate-500 flex items-center mb-1 sm:mb-0">
+        <div class="group py-4 px-6 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-6">
+          <dt class="sm:col-span-4 text-sm font-bold text-slate-500 flex items-center">
              ${field.label}
           </dt>
-          <dd class="mt-1 text-sm text-slate-900 sm:mt-0 sm:col-span-2 break-words leading-6">
+          <dd class="sm:col-span-8 text-sm text-slate-800 break-words leading-relaxed font-medium">
              ${displayValue}
           </dd>
         </div>
@@ -211,82 +100,81 @@ export class DocumentViewer {
       .join("");
 
     container.innerHTML = `
-      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 px-2 no-print">
-         <button id="backBtn" class="flex items-center text-slate-500 hover:text-primary transition-colors font-medium">
-            <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-2 shadow-sm">
-                <i class="fas fa-arrow-left text-sm"></i>
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 no-print">
+         <button id="backBtn" class="group flex items-center text-slate-500 hover:text-primary transition-colors font-medium">
+            <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-2 shadow-sm group-hover:-translate-x-1 transition-transform">
+                <i class="fas fa-arrow-left text-xs"></i>
             </div>
             <span>Volver</span>
          </button>
          
-         <div class="flex items-center gap-2 self-end sm:self-auto bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+         <div class="flex items-center gap-2 self-end sm:self-auto bg-white p-1.5 rounded-xl shadow-sm border border-slate-200">
             <button id="whatsappDocBtn" class="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Copiar para WhatsApp">
                <i class="fab fa-whatsapp text-lg"></i>
             </button>
             <button id="pdfDocBtn" class="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" title="Imprimir / PDF">
                <i class="fas fa-print text-lg"></i>
             </button>
-            <div class="h-6 w-px bg-slate-200 mx-1"></div>
+            <div class="h-6 w-px bg-slate-100 mx-1"></div>
             <button id="deleteDocBtn" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
                <i class="far fa-trash-alt text-lg"></i>
             </button>
-            <button id="editDocBtn" class="flex items-center px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg shadow-sm transition-all text-sm font-medium ml-1">
+            <button id="editDocBtn" class="flex items-center px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg shadow-md hover:shadow-lg transition-all text-sm font-bold ml-1">
                <i class="fas fa-pen mr-2 text-xs"></i> <span>Editar</span>
             </button>
          </div>
       </div>
 
-      <div id="documentCard" class="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden relative print:shadow-none print:border-none">
-        <div class="h-1.5 w-full bg-gradient-to-r from-primary to-secondary"></div>
+      <div id="documentCard" class="bg-white rounded-3xl shadow-2xl shadow-slate-200/60 border border-slate-100 overflow-hidden relative print:shadow-none print:border-none">
         
-        <div class="px-6 py-8 sm:px-8 border-b border-slate-100 bg-white">
-          <div class="flex items-start justify-between">
-            <div class="flex gap-5">
-               <div class="flex-shrink-0 w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-sm border border-slate-50" 
-                    style="background-color: ${this.template.color}10; color: ${
-      this.template.color
-    }">
-                  ${this.template.icon}
-               </div>
-               <div>
-                  <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">${
-                    this.document.metadata.title
-                  }</h1>
-                  <div class="flex items-center mt-2 text-sm text-slate-500 space-x-3">
-                     <span class="bg-slate-100 px-2 py-0.5 rounded text-xs font-medium text-slate-600 uppercase tracking-wide">${
-                       this.template.name
-                     }</span>
-                     <span>&bull;</span>
-                     <span><i class="far fa-clock mr-1"></i> ${updatedAt}</span>
-                  </div>
-               </div>
-            </div>
-          </div>
+        <div class="relative px-8 py-10 overflow-hidden">
+             <div class="absolute inset-0 opacity-10" style="background-color: ${this.template.color}"></div>
+             <div class="absolute top-0 left-0 w-full h-1.5" style="background-color: ${this.template.color}"></div>
+
+             <div class="relative z-10 flex gap-6 items-start">
+                <div class="flex-shrink-0 w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-lg bg-white text-gradient" 
+                     style="color: ${this.template.color}">
+                   ${this.template.icon}
+                </div>
+                <div>
+                   <h1 class="text-2xl sm:text-4xl font-extrabold text-slate-800 tracking-tight leading-tight mb-2">
+                     ${this.document.metadata.title}
+                   </h1>
+                   <div class="flex flex-wrap items-center gap-3 text-sm">
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg font-bold text-xs uppercase tracking-wide bg-white/60 border border-slate-200/50 text-slate-600 backdrop-blur-sm">
+                        ${this.template.name}
+                      </span>
+                      <span class="text-slate-400 flex items-center text-xs">
+                        <i class="far fa-clock mr-1.5"></i> Actualizado: ${updatedAt}
+                      </span>
+                   </div>
+                </div>
+             </div>
         </div>
 
-        <div class="px-4 py-6 sm:px-8">
-           <dl class="space-y-1">
+        <div class="py-2">
+           <dl>
               ${fieldsHtml}
            </dl>
         </div>
 
-        <div class="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-center sm:justify-between">
-           <div class="flex items-center text-emerald-600 text-xs font-medium">
-              <i class="fas fa-lock mr-2"></i> Protegido con cifrado de extremo a extremo
+        <div class="bg-slate-50 px-8 py-4 border-t border-slate-100 flex items-center justify-between mt-4">
+           <div class="flex items-center text-emerald-600 text-xs font-bold uppercase tracking-wider">
+              <i class="fas fa-shield-alt mr-2 text-lg"></i> Cifrado E2EE Verificado
            </div>
-           <div class="hidden sm:block text-slate-400 text-xs font-mono">
-              ID: ${this.document.id.substring(0, 8)}...
+           <div class="hidden sm:block text-slate-300 text-[10px] font-mono">
+              UUID: ${this.document.id}
            </div>
         </div>
       </div>
 
       <div id="rowDetailModal" class="fixed inset-0 z-50 hidden">
-         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" id="modalBackdrop"></div>
+         <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" id="modalBackdrop"></div>
          <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all scale-100 relative overflow-hidden flex flex-col max-h-[85vh]">
-                <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <h3 class="font-bold text-slate-800">Detalles del Registro</h3>
-                    <button class="close-modal text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full p-1"><i class="fas fa-times"></i></button>
+            <div class="bg-white rounded-3xl shadow-2xl w-full max-w-lg transform transition-all scale-100 relative overflow-hidden flex flex-col max-h-[85vh] animate-fade-in-up">
+                <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <h3 class="font-bold text-lg text-slate-800">Detalles del Registro</h3>
+                    <button class="close-modal w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition"><i class="fas fa-times"></i></button>
                 </div>
                 <div class="p-6 overflow-y-auto" id="rowDetailContent"></div>
             </div>
@@ -295,6 +183,83 @@ export class DocumentViewer {
     `;
 
     this.setupContentListeners();
+  }
+
+  // --- RENDERIZADO DE VALORES ---
+  renderFieldValue(type, value, isTableContext = false) {
+    if (
+      value === undefined ||
+      value === null ||
+      (typeof value === "string" && value.trim() === "")
+    ) {
+      return '<span class="text-slate-300 italic text-xs select-none">Vacío</span>';
+    }
+
+    switch (type) {
+      case "boolean":
+        return value
+          ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700"><i class="fas fa-check mr-1"></i> Sí</span>'
+          : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500">No</span>';
+
+      case "date":
+        try {
+          const [y, m, d] = String(value).split("-");
+          const dateObj = new Date(y, m - 1, d);
+          return `<span class="font-semibold text-slate-700"><i class="far fa-calendar text-slate-400 mr-2"></i>${dateObj.toLocaleDateString()}</span>`;
+        } catch {
+          return value;
+        }
+
+      case "currency":
+        const formatted = new Intl.NumberFormat(this.currencyConfig.locale, {
+          style: "currency",
+          currency: this.currencyConfig.codigo,
+        }).format(Number(value));
+        return `<span class="font-mono font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">${formatted}</span>`;
+
+      case "percentage":
+        return `<span class="font-mono font-bold text-slate-700">${value}%</span>`;
+
+      case "secret":
+        if (isTableContext) {
+          return `<div class="group cursor-pointer select-none"><span class="blur-sm group-hover:blur-none transition-all font-mono text-xs bg-slate-100 px-1 rounded">••••••</span></div>`;
+        }
+        return `
+            <div class="flex items-center gap-2">
+              <div class="relative group overflow-hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-all hover:border-indigo-200 hover:shadow-sm">
+                 <span class="secret-mask filter blur-[5px] select-none transition-all duration-300 group-hover:blur-none font-mono text-sm text-slate-800 tracking-wider">••••••••••••••</span>
+                 <span class="secret-revealed hidden font-mono text-sm text-slate-800 select-all font-bold tracking-wide">${value}</span>
+              </div>
+              <button class="toggle-secret-btn w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" title="Revelar">
+                <i class="fas fa-eye"></i>
+              </button>
+              <button class="copy-btn w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors" data-value="${value}" title="Copiar">
+                <i class="far fa-copy"></i>
+              </button>
+            </div>`;
+
+      case "url":
+        let url = typeof value === "object" ? value.url : value;
+        let text = typeof value === "object" ? value.text || url : value;
+        if (!url) return '<span class="text-slate-300 italic">--</span>';
+
+        const display =
+          isTableContext && text.length > 20
+            ? text.substring(0, 18) + "..."
+            : text;
+        return `
+            <a href="${url}" target="_blank" class="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">
+                <i class="fas fa-link text-xs opacity-50"></i> ${display}
+            </a>`;
+
+      case "text":
+        if (isTableContext)
+          return value.length > 30 ? value.substring(0, 30) + "..." : value;
+        return `<div class="prose prose-sm max-w-none text-slate-600 whitespace-pre-line">${value}</div>`;
+
+      default:
+        return String(value);
+    }
   }
 
   // --- LÓGICA DE TABLAS MEJORADA ---
@@ -386,89 +351,75 @@ export class DocumentViewer {
 
   renderTableField(field, value) {
     const rows = Array.isArray(value) ? value : [];
-    if (rows.length === 0) {
-      return `
-        <div class="py-5 px-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/30 text-center my-4">
-            <p class="text-sm font-medium text-slate-500 mb-1">${field.label}</p>
-            <p class="text-xs text-slate-400">Sin registros almacenados</p>
-        </div>`;
-    }
+    if (rows.length === 0)
+      return `<div class="my-4 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 text-center text-xs text-slate-400">Tabla vacía</div>`;
 
     const state = this.tableStates[field.id] || {
       search: "",
       sortCol: null,
       sortDir: "asc",
     };
-    const processedRows = this.getProcessedRows(field, rows);
+    const processed = this.getProcessedRows(field, rows);
     const isComplex = field.columns.length > 3;
-    const displayColumns = isComplex
-      ? field.columns.slice(0, 3)
-      : field.columns;
+    const displayCols = isComplex ? field.columns.slice(0, 3) : field.columns;
 
-    const headers = displayColumns
-      .map((c) => {
-        let sortIcon = '<i class="fas fa-sort text-slate-300 ml-1"></i>';
-        if (state.sortCol === c.id) {
-          sortIcon =
-            state.sortDir === "asc"
-              ? '<i class="fas fa-sort-up text-primary ml-1"></i>'
-              : '<i class="fas fa-sort-down text-primary ml-1"></i>';
-        }
-        return `<th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition select-none table-header-sort" data-field-id="${
+    const headers = displayCols
+      .map(
+        (c) => `
+        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-primary transition select-none table-header-sort" data-field-id="${
           field.id
         }" data-col-id="${c.id}">
-            <div class="flex items-center">${
-              c.label || c.name
-            } ${sortIcon}</div>
-        </th>`;
-      })
+            ${c.label} ${
+          state.sortCol === c.id ? (state.sortDir === "asc" ? "↑" : "↓") : ""
+        }
+        </th>`
+      )
+      .join("");
+
+    const body = processed
+      .map(
+        (row, i) => `
+        <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors last:border-0">
+            ${displayCols
+              .map(
+                (c) =>
+                  `<td class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">${this.renderFieldValue(
+                    c.type,
+                    row[c.id],
+                    true
+                  )}</td>`
+              )
+              .join("")}
+            ${
+              isComplex
+                ? `<td class="px-4 py-3 text-right"><button class="view-row-btn text-primary bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition" data-field-id="${field.id}" data-row-index="${i}"><i class="fas fa-eye text-xs"></i></button></td>`
+                : ""
+            }
+        </tr>`
+      )
       .join("");
 
     return `
-      <div class="py-6 sm:col-span-3">
-         <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
-             <div class="flex items-center">
-                 <dt class="text-sm font-medium text-slate-500 mr-2">${
-                   field.label
-                 }</dt>
-                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${
-                   rows.length
-                 } total</span>
-             </div>
-             <div class="relative max-w-xs w-full sm:w-64">
-                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                     <i class="fas fa-search text-xs"></i>
-                 </div>
-                 <input type="text" 
-                        class="table-search-input w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary transition outline-none"
-                        placeholder="Buscar en tabla..." 
-                        data-field-id="${field.id}"
-                        value="${state.search}">
-             </div>
+      <div class="col-span-full mt-4 mb-6">
+         <div class="flex items-center justify-between mb-2">
+             <label class="text-sm font-bold text-slate-500">${
+               field.label
+             } <span class="ml-2 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs">${
+      rows.length
+    }</span></label>
+             <input type="text" class="table-search-input text-xs border border-slate-200 rounded-lg px-2 py-1 w-40 focus:ring-2 focus:ring-primary/20 outline-none" placeholder="Buscar..." data-field-id="${
+               field.id
+             }">
          </div>
-         <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+         <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-100">
              <div class="overflow-x-auto">
-                 <table class="min-w-full divide-y divide-slate-100" id="table-${
-                   field.id
-                 }">
-                    <thead class="bg-slate-50"><tr>${headers}${
-      isComplex ? '<th class="w-10"></th>' : ""
+                 <table class="min-w-full"><thead class="bg-slate-50/50 border-b border-slate-100"><tr>${headers}${
+      isComplex ? "<th></th>" : ""
     }</tr></thead>
-                    <tbody class="divide-y divide-slate-100 bg-white" id="tbody-${
-                      field.id
-                    }">
-                        ${this.generateTableBodyHtml(field, processedRows)}
-                    </tbody>
-                 </table>
+                 <tbody>${body}</tbody></table>
              </div>
-             ${
-               isComplex
-                 ? '<div class="bg-slate-50/50 px-4 py-2 text-[10px] text-slate-400 text-center border-t border-slate-100 uppercase tracking-wide">Mostrando resumen • Click en ojo para detalles</div>'
-                 : ""
-             }
          </div>
-      </div>
-    `;
+      </div>`;
   }
 
   setupContentListeners() {

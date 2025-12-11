@@ -10,7 +10,7 @@ export class TemplateManager {
     this.currentView = "list";
     this.editingTemplateId = null;
 
-    // Instancias (Asumimos que estos componentes se actualizarán en el futuro)
+    // Inicializamos la Lista
     this.listComponent = new TemplateList({
       onNew: () => this.setView("create"),
       onImport: (file) => this.handleImport(file),
@@ -21,6 +21,7 @@ export class TemplateManager {
       onFilter: (cat) => this.loadTemplates(cat),
     });
 
+    // Inicializamos el Formulario
     this.formComponent = new TemplateForm({
       onSave: (data) => this.handleSave(data),
       onCancel: () => this.setView("list"),
@@ -28,7 +29,8 @@ export class TemplateManager {
   }
 
   render() {
-    return `<div id="templateContent" class="min-h-[500px] animate-fade-in"></div>`;
+    // Contenedor principal con animación
+    return `<div id="templateContent" class="min-h-[500px] w-full animate-fade-in"></div>`;
   }
 
   async setView(view, id = null) {
@@ -37,16 +39,20 @@ export class TemplateManager {
     const container = document.getElementById("templateContent");
     if (!container) return;
 
-    this.renderLoading(container);
+    // Solo mostramos loading si cambiamos de vista drásticamente
+    if (view === "list" && !container.querySelector(".template-card")) {
+      this.renderLoading(container);
+    }
 
     if (view === "list") {
       await this.loadTemplates();
     } else {
       let template = null;
       if (id) {
+        // Pequeño loading local mientras carga la data de edición
+        container.innerHTML = `<div class="flex justify-center p-10"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>`;
         template = await templateService.getTemplateById(id);
       }
-      // Renderizamos el formulario (TemplateForm debería devolver HTML Tailwind también)
       container.innerHTML = this.formComponent.render(template);
       this.formComponent.setupListeners(container);
     }
@@ -54,23 +60,40 @@ export class TemplateManager {
 
   async loadTemplates(categoryFilter = "all") {
     const container = document.getElementById("templateContent");
-    if (
-      !container ||
-      (this.currentView !== "list" && container.querySelector("form"))
-    )
-      return;
+    if (!container) return;
 
-    // Solo mostramos loading si está vacío para evitar parpadeos en filtrado
-    if (!container.innerHTML.trim()) this.renderLoading(container);
+    // Si estamos volviendo de 'create', aseguramos loading
+    if (this.currentView !== "list") this.renderLoading(container);
 
     try {
       const templates = await templateService.getUserTemplates();
-      const categories = await templateService.getCategories();
+
+      // --- LÓGICA DE CONTADORES DINÁMICOS ---
+      // Calculamos cuántas plantillas hay por categoría en tiempo real
+      const stats = templates.reduce((acc, t) => {
+        const cat = t.settings?.category || "custom";
+        acc[cat] = (acc[cat] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Generamos el array de objetos { id, count } que necesita TemplateList.js
+      // Orden: 'custom' primero, luego el resto
+      const uniqueCats = Object.keys(stats).sort((a, b) => {
+        if (a === "custom") return -1;
+        if (b === "custom") return 1;
+        return a.localeCompare(b);
+      });
+
+      const categories = uniqueCats.map((id) => ({
+        id: id,
+        count: stats[id],
+      }));
+      // ---------------------------------------
 
       let displayTemplates = templates;
       if (categoryFilter !== "all") {
         displayTemplates = templates.filter(
-          (t) => t.settings.category === categoryFilter
+          (t) => (t.settings?.category || "custom") === categoryFilter
         );
       }
 
@@ -82,27 +105,37 @@ export class TemplateManager {
       this.listComponent.setupListeners(container);
     } catch (error) {
       console.error(error);
-      container.innerHTML = `
-        <div class="max-w-lg mx-auto mt-10 p-6 bg-red-50 border border-red-100 rounded-2xl text-center">
-            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3 text-red-500">
-                <i class="fas fa-exclamation-triangle"></i>
-            </div>
-            <h3 class="text-red-800 font-bold">Error de Carga</h3>
-            <p class="text-red-600 text-sm mt-1">${error.message}</p>
-            <button onclick="document.getElementById('navHome').click()" class="mt-4 text-sm text-red-700 underline">Volver al inicio</button>
-        </div>`;
+      this.renderError(container, error.message);
     }
   }
 
   renderLoading(container) {
     container.innerHTML = `
-        <div class="flex flex-col items-center justify-center h-64">
-            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-            <p class="text-slate-400 text-sm mt-3 animate-pulse">Cargando gestor...</p>
+        <div class="flex flex-col items-center justify-center h-96">
+            <div class="relative">
+                <div class="w-16 h-16 rounded-full border-4 border-indigo-50 border-t-primary animate-spin"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <i class="fas fa-layer-group text-indigo-300 text-xs"></i>
+                </div>
+            </div>
+            <p class="text-slate-500 font-medium mt-4 animate-pulse">Cargando catálogo...</p>
         </div>`;
   }
 
-  // --- Handlers (Lógica intacta) ---
+  renderError(container, message) {
+    container.innerHTML = `
+        <div class="max-w-md mx-auto mt-10 p-6 bg-red-50 border border-red-100 rounded-2xl text-center">
+            <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-red-500">
+                <i class="fas fa-wifi-slash"></i>
+            </div>
+            <h3 class="text-red-800 font-bold">Error de Conexión</h3>
+            <p class="text-red-600 text-sm mt-1">${message}</p>
+            <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 text-sm font-bold transition">Reintentar</button>
+        </div>`;
+  }
+
+  // --- Handlers ---
+
   async handleSave(data) {
     try {
       if (this.currentView === "edit" && this.editingTemplateId) {
@@ -117,7 +150,7 @@ export class TemplateManager {
   }
 
   async handleDelete(id) {
-    if (confirm("¿Eliminar plantilla? Esta acción es irreversible.")) {
+    if (confirm("¿Estás seguro de eliminar esta plantilla?")) {
       try {
         await templateService.deleteTemplate(id);
         this.loadTemplates();
@@ -130,24 +163,27 @@ export class TemplateManager {
   async handleExport(id) {
     try {
       const data = await templateService.exportTemplate(id);
+      const fileName = `${(data.name || "plantilla")
+        .replace(/[^a-z0-9]/gi, "_")
+        .toLowerCase()}.json`;
+
       const blob = new Blob([JSON.stringify(data, null, 2)], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${(data.name || "plantilla")
-        .replace(/[^a-z0-9]/gi, "_")
-        .toLowerCase()}.template.json`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
     } catch (e) {
-      alert("Error: " + e.message);
+      alert("Error exportando: " + e.message);
     }
   }
 
   async handleImport(file) {
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -155,7 +191,7 @@ export class TemplateManager {
         await templateService.importTemplate(json);
         this.loadTemplates();
       } catch (err) {
-        alert("Error importando: " + err.message);
+        alert("El archivo no es válido.");
       }
     };
     reader.readAsText(file);

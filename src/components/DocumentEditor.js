@@ -2,7 +2,6 @@
 
 import { templateFormGenerator } from "../services/templates/form-generator.js";
 import { documentService } from "../services/documents/index.js";
-// 👇👇👇 ESTA LÍNEA FALTABA 👇👇👇
 import { encryptionService } from "../services/encryption/index.js";
 
 export class DocumentEditor {
@@ -20,8 +19,7 @@ export class DocumentEditor {
 
     this.isSubmitting = false;
 
-    // LÓGICA DE SEGURIDAD E INICIALIZACIÓN
-    // Si estamos editando y no tenemos la plantilla (ni datos descifrados), iniciamos carga segura.
+    // Seguridad: Si editamos sin datos descifrados, forzar carga segura
     if (this.isEditing && !this.template) {
       this.checkSecurityAndLoad();
     }
@@ -29,16 +27,12 @@ export class DocumentEditor {
 
   checkSecurityAndLoad() {
     if (!encryptionService.isReady()) {
-      console.log(
-        "🔐 Bóveda cerrada. Solicitando llave para descifrar datos..."
-      );
+      console.log("🔐 Bóveda cerrada. Solicitando llave...");
       if (window.app && window.app.requireEncryption) {
-        window.app.requireEncryption(() => {
-          this.loadExistingDocument();
-        });
+        window.app.requireEncryption(() => this.loadExistingDocument());
       } else {
         this.renderError(
-          "Sistema de seguridad no disponible. Por favor recarga la página."
+          "Sistema de seguridad no disponible. Recarga la página."
         );
       }
     } else {
@@ -60,72 +54,86 @@ export class DocumentEditor {
       this.setupEventListeners();
       this.updateEditorState(false);
     } catch (error) {
-      console.error("Error al cargar documento:", error);
+      console.error("Error carga:", error);
       this.renderError("Error al cargar datos cifrados: " + error.message);
     }
   }
 
   render() {
+    // Loading State
     if (!this.template && this.isEditing) {
-      return `<div id="editorContainer" class="flex justify-center items-center py-20"><div class="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-primary"></div></div>`;
+      return `
+        <div id="editorContainer" class="flex flex-col justify-center items-center py-32 animate-fade-in">
+            <div class="relative">
+                <div class="w-16 h-16 rounded-full border-4 border-slate-100 border-t-primary animate-spin"></div>
+                <div class="absolute inset-0 flex items-center justify-center text-primary"><i class="fas fa-lock-open"></i></div>
+            </div>
+            <p class="mt-4 text-slate-400 font-medium animate-pulse">Descifrando documento seguro...</p>
+        </div>`;
     }
 
     if (!this.template) {
-      return `<div id="editorContainer" class="p-4 text-red-500">Error: Plantilla no definida.</div>`;
+      return `<div id="editorContainer" class="p-8 text-center bg-red-50 rounded-2xl text-red-600 font-bold border border-red-100">Error: Plantilla no definida.</div>`;
     }
 
     const title = this.isEditing
       ? `Editando: ${this.documentMetadata?.title || this.template.name}`
       : `Nuevo Documento: ${this.template.name}`;
-    const submitText = this.isEditing
-      ? "Actualizar y Recifrar"
-      : "Guardar y Cifrar";
 
+    const submitText = this.isEditing ? "Actualizar" : "Guardar";
+    const submitIcon = this.isEditing ? "fa-sync-alt" : "fa-save";
+
+    // Layout Principal
     return `
-      <div id="editorContainer" class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden animate-fade-in mb-10">
-        <div class="px-6 py-5 border-b border-slate-100 bg-white flex justify-between items-center sticky top-0 z-20 backdrop-blur-md bg-white/90">
-          <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-sm border border-slate-50" style="background-color: ${
-              this.template.color
-            }10; color: ${this.template.color}">
+      <div id="editorContainer" class="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden animate-fade-in-up mb-20 relative">
+        
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center sticky top-0 z-30 bg-white/90 backdrop-blur-md transition-all shadow-sm">
+          <div class="flex items-center gap-4 overflow-hidden">
+            <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-inner" 
+                 style="background-color: ${this.template.color}15; color: ${
+      this.template.color
+    }">
                 ${this.template.icon}
             </div>
-            <div>
-              <h2 class="text-xl font-bold text-slate-800 tracking-tight">${title}</h2>
-              <p class="text-sm text-slate-500 font-medium">Los datos se cifrarán antes de salir de tu dispositivo.</p>
+            <div class="min-w-0">
+              <h2 class="text-lg font-bold text-slate-800 truncate">${title}</h2>
+              <p class="text-xs text-slate-400 font-medium flex items-center gap-1">
+                 <i class="fas fa-shield-alt text-emerald-500"></i> Cifrado E2EE
+              </p>
             </div>
           </div>
-          <button id="closeEditorBtn" class="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition"><i class="fas fa-times text-lg"></i></button>
+          <div class="flex items-center gap-2">
+             <button id="cancelDocBtn" class="p-2 sm:px-4 sm:py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition font-medium text-sm">
+                <span class="hidden sm:inline">Cancelar</span>
+                <span class="sm:hidden"><i class="fas fa-times"></i></span>
+             </button>
+             <button id="saveDocBtn" class="px-4 py-2 bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary-hover text-white rounded-xl shadow-lg shadow-indigo-500/30 font-bold transition-all transform active:scale-95 flex items-center gap-2 text-sm">
+               <i class="fas ${submitIcon}"></i> <span class="hidden sm:inline">${submitText}</span>
+             </button>
+          </div>
         </div>
 
-        <div class="p-6 sm:p-8 bg-slate-50/30">
-          <div id="dynamicFormContainer" class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+        <div class="p-6 sm:p-10 bg-slate-50/50 min-h-[500px]">
+          
+          <div id="dynamicFormContainer" class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
             ${templateFormGenerator.generateFormHtml(
               this.template,
               this.initialFormData
             )}
           </div>
 
-          <div class="mt-8 mb-6 flex items-start p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
-            <div class="p-2 bg-emerald-100 rounded-lg text-emerald-600 mr-4">
-                <i class="fas fa-shield-alt text-xl"></i>
-            </div>
-            <div class="text-sm text-emerald-800">
-              <p class="font-bold">Seguridad E2EE Activa</p>
-              <p class="opacity-90 mt-1">Antes de guardar, todos los datos serán cifrados usando tu llave maestra.</p>
+          <div class="mt-12 flex items-center justify-center p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-center">
+            <div class="text-xs text-indigo-400 font-medium">
+              <i class="fas fa-info-circle mr-1"></i>
+              Todos los campos son cifrados localmente antes de guardarse.
             </div>
           </div>
 
-          <div class="flex justify-end items-center gap-3 pt-6 border-t border-slate-200">
-            <button id="cancelDocBtn" class="px-5 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl hover:bg-slate-50 font-medium transition shadow-sm">Cancelar</button>
-            <button id="saveDocBtn" class="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl shadow-lg shadow-blue-500/20 font-bold transition-all transform active:scale-95 flex items-center">
-              <i class="fas fa-save mr-2"></i> <span>${submitText}</span>
-            </button>
-          </div>
         </div>
       </div>
       
       <style>
+        /* Ajustes de Grid para campos anchos */
         #dynamicFormContainer > div:has(textarea),
         #dynamicFormContainer > div:has(.table-input-container) {
             grid-column: span 1;
@@ -142,26 +150,25 @@ export class DocumentEditor {
 
   setupEventListeners() {
     document
-      .getElementById("closeEditorBtn")
-      ?.addEventListener("click", () => this.onCancel());
-    document
       .getElementById("cancelDocBtn")
       ?.addEventListener("click", () => this.onCancel());
     document
       .getElementById("saveDocBtn")
       ?.addEventListener("click", () => this.handleSave());
 
+    // Iniciar lógica de cálculos y tablas
     this.setupMathCalculations();
     this.setupTableInteractivity();
   }
 
-  // ... (setupTableInteractivity se mantiene igual, ya lo tienes actualizado de la respuesta anterior para soportar URL y Password) ...
-  // Incluye aquí el bloque setupTableInteractivity COMPLETO de mi respuesta anterior sobre Tablas.
   setupTableInteractivity() {
     const containers = document.querySelectorAll(".table-input-container");
+
     containers.forEach((container) => {
+      // Estilización del contenedor de tabla
       container.className =
-        "table-input-container w-full overflow-hidden border border-slate-200 rounded-xl bg-white shadow-sm";
+        "table-input-container w-full overflow-hidden border border-slate-200 rounded-2xl bg-white shadow-sm ring-1 ring-slate-100";
+
       const fieldId = container.dataset.fieldId;
       const hiddenInput = container.querySelector(`#${fieldId}`);
       const tbody = container.querySelector(".table-body");
@@ -169,28 +176,28 @@ export class DocumentEditor {
 
       if (addBtn) {
         addBtn.className =
-          "add-row-btn w-full py-3 bg-slate-50 hover:bg-slate-100 text-primary font-medium text-sm transition-colors border-t border-slate-200 flex items-center justify-center gap-2";
-        addBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Agregar Fila';
+          "add-row-btn w-full py-3 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 font-bold text-xs uppercase tracking-wider transition-colors border-t border-slate-100 flex items-center justify-center gap-2 group";
+        addBtn.innerHTML =
+          '<i class="fas fa-plus-circle group-hover:scale-110 transition-transform"></i> Agregar Registro';
       }
 
       const thead = container.querySelector("thead");
       if (thead)
         thead.className =
-          "bg-slate-50 text-xs uppercase font-semibold text-slate-500";
+          "bg-slate-50/80 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100";
+
       const ths = container.querySelectorAll("th");
-      ths.forEach(
-        (th) => (th.className = "px-4 py-3 text-left tracking-wider")
-      );
+      ths.forEach((th) => (th.className = "px-4 py-3 text-left tracking-wide"));
 
       let columnsDef = [];
       try {
         columnsDef = JSON.parse(container.nextElementSibling.textContent);
       } catch (e) {}
 
-      // Renderizado de celdas (Versión Completa URL/Password)
+      // --- Renderizador de Celdas (Inputs internos) ---
       const renderCellInput = (col, val) => {
         const commonClass =
-          "w-full text-sm border-0 bg-transparent focus:ring-0 p-2 placeholder-slate-300";
+          "w-full text-sm border-0 bg-transparent focus:ring-0 p-2 placeholder-slate-300 font-medium text-slate-700";
         const value = val !== undefined && val !== null ? val : "";
 
         if (col.type === "url") {
@@ -200,33 +207,42 @@ export class DocumentEditor {
             url: urlVal,
             text: textVal,
           }).replace(/"/g, "&quot;");
+
           return `
-             <div class="url-cell-group min-w-[180px] space-y-1">
+             <div class="url-cell-group min-w-[200px] space-y-1.5 p-1">
                  <input type="hidden" class="cell-input url-json-store" data-col-id="${col.id}" value="${jsonValue}">
-                 <div class="flex items-center bg-slate-50 rounded-md border border-slate-200 px-2">
+                 <div class="flex items-center bg-slate-50 rounded-lg border border-slate-200 px-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                      <i class="fas fa-link text-[10px] text-slate-400 mr-2"></i>
-                     <input type="text" class="url-part-link w-full bg-transparent border-none text-xs py-1.5 focus:ring-0 text-blue-600 placeholder-slate-400" placeholder="https://..." value="${urlVal}">
+                     <input type="text" class="url-part-link w-full bg-transparent border-none text-xs py-1.5 focus:ring-0 text-blue-600 placeholder-slate-400 font-mono" placeholder="https://..." value="${urlVal}">
                  </div>
-                 <div class="flex items-center bg-white rounded-md border border-slate-200 px-2">
-                     <i class="fas fa-font text-[10px] text-slate-400 mr-2"></i>
-                     <input type="text" class="url-part-text w-full bg-transparent border-none text-xs py-1.5 focus:ring-0 text-slate-700 placeholder-slate-300" placeholder="Texto visible" value="${textVal}">
+                 <div class="flex items-center bg-white rounded-lg border border-slate-200 px-2 focus-within:border-slate-300 transition-colors">
+                     <i class="fas fa-font text-[10px] text-slate-300 mr-2"></i>
+                     <input type="text" class="url-part-text w-full bg-transparent border-none text-xs py-1.5 focus:ring-0 text-slate-600 placeholder-slate-300" placeholder="Texto descriptivo" value="${textVal}">
                  </div>
              </div>`;
         }
+
         if (col.type === "secret") {
           return `
-            <div class="relative group">
-                <input type="password" class="${commonClass} pr-8 cell-input" data-col-id="${col.id}" value="${value}" placeholder="••••">
-                <button type="button" class="toggle-pass-cell absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-primary transition-colors focus:outline-none" tabindex="-1">
-                    <i class="fas fa-eye text-xs"></i>
-                </button>
+            <div class="relative group p-1">
+                <div class="flex items-center bg-slate-50 rounded-lg border border-slate-200 focus-within:border-secondary focus-within:bg-white transition-colors">
+                    <input type="password" class="${commonClass} rounded-lg" data-col-id="${col.id}" value="${value}" placeholder="••••">
+                    <button type="button" class="toggle-pass-cell px-3 text-slate-400 hover:text-secondary focus:outline-none" tabindex="-1">
+                        <i class="fas fa-eye text-xs"></i>
+                    </button>
+                </div>
             </div>`;
         }
+
         if (col.type === "boolean") {
-          return `<div class="flex justify-center"><input type="checkbox" class="h-4 w-4 text-primary border-slate-300 rounded focus:ring-primary cursor-pointer cell-input" data-col-id="${
-            col.id
-          }" ${value ? "checked" : ""}></div>`;
+          return `
+            <div class="flex justify-center items-center h-full py-2">
+                <input type="checkbox" class="w-5 h-5 text-primary border-slate-300 rounded focus:ring-primary cursor-pointer cell-input transition-all" data-col-id="${
+                  col.id
+                }" ${value ? "checked" : ""}>
+            </div>`;
         }
+
         if (col.type === "select") {
           const opts = (col.options || [])
             .map(
@@ -236,7 +252,7 @@ export class DocumentEditor {
                 }>${o}</option>`
             )
             .join("");
-          return `<select class="${commonClass} cursor-pointer cell-input" data-col-id="${col.id}"><option value="">Seleccionar...</option>${opts}</select>`;
+          return `<div class="p-1"><select class="${commonClass} bg-slate-50 rounded-lg cursor-pointer cell-input" data-col-id="${col.id}"><option value="">--</option>${opts}</select></div>`;
         }
 
         const isNumeric = ["number", "currency", "percentage"].includes(
@@ -251,108 +267,135 @@ export class DocumentEditor {
           ? ""
           : "Escribir...";
         const inputType = col.type === "date" ? "date" : "text";
-        return `<input type="${inputType}" class="${inputClass} cell-input" data-col-id="${col.id}" value="${value}" placeholder="${placeholder}">`;
+
+        return `<div class="p-1"><input type="${inputType}" class="${inputClass} rounded-lg hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/10 transition-all cell-input" data-col-id="${col.id}" value="${value}" placeholder="${placeholder}"></div>`;
       };
 
+      // --- Renderizador de Fila ---
       const renderRow = (rowData = {}) => {
         const tr = document.createElement("tr");
         tr.className =
-          "group border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors";
+          "group border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors";
+
         let tds = "";
         columnsDef.forEach((col) => {
-          tds += `<td class="p-2 border-r border-slate-100 last:border-0 align-top">${renderCellInput(
+          tds += `<td class="p-1 border-r border-slate-50 last:border-0 align-top">${renderCellInput(
             col,
             rowData[col.id]
           )}</td>`;
         });
-        tds += `<td class="w-10 text-center p-0 align-middle"><button type="button" class="remove-row-btn w-full h-full min-h-[40px] text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"><i class="fas fa-times"></i></button></td>`;
+
+        tds += `<td class="w-10 text-center p-0 align-middle">
+                    <button type="button" class="remove-row-btn w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all mx-auto flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </td>`;
+
         tr.innerHTML = tds;
         tbody.appendChild(tr);
 
-        tr.querySelectorAll(".math-input").forEach((input) => {
-          input.addEventListener("blur", () => this.evaluateMathInput(input));
-          input.addEventListener(
-            "keydown",
-            (e) =>
-              (e.key === "Enter" || e.key === "=") &&
-              this.evaluateMathInput(input)
-          );
-        });
-        tr.querySelectorAll(".url-cell-group").forEach((group) => {
-          const hidden = group.querySelector(".url-json-store");
-          const linkInput = group.querySelector(".url-part-link");
-          const textInput = group.querySelector(".url-part-text");
-          const syncUrl = () => {
-            hidden.value = JSON.stringify({
-              url: linkInput.value.trim(),
-              text: textInput.value.trim(),
-            });
-            hidden.dispatchEvent(new Event("change", { bubbles: true }));
-          };
-          linkInput.addEventListener("input", syncUrl);
-          textInput.addEventListener("input", syncUrl);
-        });
-        tr.querySelectorAll(".toggle-pass-cell").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const input = btn.previousElementSibling;
-            const icon = btn.querySelector("i");
-            if (input.type === "password") {
-              input.type = "text";
-              icon.className = "fas fa-eye-slash";
-              btn.classList.add("text-primary");
-            } else {
-              input.type = "password";
-              icon.className = "fas fa-eye";
-              btn.classList.remove("text-primary");
-            }
-          });
-        });
+        // Listeners internos de la fila
+        this.attachRowListeners(tr);
       };
 
+      // Carga inicial
       const initialData = JSON.parse(hiddenInput.value || "[]");
       initialData.forEach((row) => renderRow(row));
+
+      // Botón Agregar
       addBtn.addEventListener("click", () => renderRow({}));
+
+      // Delegación para borrar
       tbody.addEventListener("click", (e) => {
         if (e.target.closest(".remove-row-btn")) {
           e.target.closest("tr").remove();
-          updateHiddenInput();
+          this.updateHiddenTableInput(tbody, columnsDef, hiddenInput);
         }
       });
-      tbody.addEventListener("input", () => updateHiddenInput());
-      tbody.addEventListener("change", () => updateHiddenInput());
 
-      const updateHiddenInput = () => {
-        const rows = [];
-        tbody.querySelectorAll("tr").forEach((tr) => {
-          const rowObj = {};
-          tr.querySelectorAll(".cell-input").forEach((input) => {
-            const colId = input.dataset.colId;
-            const colDef = columnsDef.find((c) => c.id === colId);
-            let val;
-            if (colDef && colDef.type === "url") {
-              try {
-                val = JSON.parse(input.value);
-              } catch (e) {
-                val = { url: input.value, text: "" };
-              }
-            } else if (input.type === "checkbox") {
-              val = input.checked;
-            } else {
-              val = input.value;
-              if (
-                colDef &&
-                ["number", "currency", "percentage"].includes(colDef.type)
-              ) {
-                val = val === "" || isNaN(val) ? null : Number(val);
-              }
-            }
-            rowObj[colId] = val;
-          });
-          rows.push(rowObj);
-        });
-        hiddenInput.value = JSON.stringify(rows);
-      };
+      // Sync global
+      tbody.addEventListener("input", () =>
+        this.updateHiddenTableInput(tbody, columnsDef, hiddenInput)
+      );
+      tbody.addEventListener("change", () =>
+        this.updateHiddenTableInput(tbody, columnsDef, hiddenInput)
+      );
     });
+  }
+
+  attachRowListeners(tr) {
+    tr.querySelectorAll(".math-input").forEach((input) => {
+      input.addEventListener("blur", () => this.evaluateMathInput(input));
+      input.addEventListener(
+        "keydown",
+        (e) =>
+          (e.key === "Enter" || e.key === "=") && this.evaluateMathInput(input)
+      );
+    });
+
+    tr.querySelectorAll(".url-cell-group").forEach((group) => {
+      const hidden = group.querySelector(".url-json-store");
+      const link = group.querySelector(".url-part-link");
+      const text = group.querySelector(".url-part-text");
+      const sync = () => {
+        hidden.value = JSON.stringify({
+          url: link.value.trim(),
+          text: text.value.trim(),
+        });
+        hidden.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      link.addEventListener("input", sync);
+      text.addEventListener("input", sync);
+    });
+
+    tr.querySelectorAll(".toggle-pass-cell").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const input = btn.previousElementSibling;
+        const icon = btn.querySelector("i");
+        if (input.type === "password") {
+          input.type = "text";
+          icon.className = "fas fa-eye-slash";
+          btn.classList.add("text-secondary");
+        } else {
+          input.type = "password";
+          icon.className = "fas fa-eye";
+          btn.classList.remove("text-secondary");
+        }
+      });
+    });
+  }
+
+  updateHiddenTableInput(tbody, columnsDef, hiddenInput) {
+    const rows = [];
+    tbody.querySelectorAll("tr").forEach((tr) => {
+      const rowObj = {};
+      tr.querySelectorAll(".cell-input").forEach((input) => {
+        const colId = input.dataset.colId;
+        const colDef = columnsDef.find((c) => c.id === colId);
+        let val;
+
+        if (colDef && colDef.type === "url") {
+          try {
+            val = JSON.parse(input.value);
+          } catch (e) {
+            val = { url: input.value, text: "" };
+          }
+        } else if (input.type === "checkbox") {
+          val = input.checked;
+        } else {
+          val = input.value;
+          if (
+            colDef &&
+            ["number", "currency", "percentage"].includes(colDef.type)
+          ) {
+            val = val === "" || isNaN(val) ? null : Number(val);
+          }
+        }
+        rowObj[colId] = val;
+      });
+      rows.push(rowObj);
+    });
+    hiddenInput.value = JSON.stringify(rows);
   }
 
   setupMathCalculations() {
@@ -361,7 +404,6 @@ export class DocumentEditor {
       .forEach((field) => {
         const input = document.getElementById(field.id);
         if (!input) return;
-        if (!input.placeholder) input.placeholder = "0.00 (admite fórmulas)";
         input.classList.add("font-mono", "text-right");
 
         input.addEventListener(
@@ -383,23 +425,17 @@ export class DocumentEditor {
         if (isFinite(result)) {
           input.value = Math.round(result * 100) / 100;
           input.dispatchEvent(new Event("input", { bubbles: true }));
-          input.classList.add(
-            "bg-emerald-50",
-            "text-emerald-700",
-            "font-bold",
-            "ring-2",
-            "ring-emerald-500"
-          );
+
+          // Efecto visual de cálculo
+          input.classList.add("text-emerald-600", "font-bold", "bg-emerald-50");
           setTimeout(
             () =>
               input.classList.remove(
-                "bg-emerald-50",
-                "text-emerald-700",
+                "text-emerald-600",
                 "font-bold",
-                "ring-2",
-                "ring-emerald-500"
+                "bg-emerald-50"
               ),
-            600
+            800
           );
         }
       } catch (e) {}
@@ -416,29 +452,27 @@ export class DocumentEditor {
     }
 
     if (!encryptionService.isReady()) {
-      console.log("🔐 Llave requerida para cifrar antes de guardar.");
       if (window.app && window.app.requireEncryption) {
-        window.app.requireEncryption(() => {
-          this.handleSave();
-        });
+        window.app.requireEncryption(() => this.handleSave());
       }
       return;
     }
 
     this.updateEditorState(
       true,
-      this.isEditing ? "Cifrando y actualizando..." : "Cifrando y guardando..."
+      this.isEditing ? "Cifrando cambios..." : "Creando seguro..."
     );
 
     try {
+      // Forzar evaluación de mates pendientes
       document
         .querySelectorAll(".math-input")
         .forEach((inp) => this.evaluateMathInput(inp));
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 100)); // Breve pausa para UI
 
       const formData = this.collectFormData();
-
       let result;
+
       if (this.isEditing) {
         result = await documentService.updateDocument(
           this.documentId,
@@ -451,8 +485,8 @@ export class DocumentEditor {
 
       if (this.onSaveSuccess) this.onSaveSuccess(result);
     } catch (error) {
-      console.error("Error al guardar:", error);
-      alert("Error al procesar el guardado: " + error.message);
+      console.error("Error save:", error);
+      alert("Error: " + error.message);
       this.updateEditorState(false);
     }
   }
@@ -460,6 +494,7 @@ export class DocumentEditor {
   collectFormData() {
     const formData = {};
     this.template.fields.forEach((field) => {
+      // Manejo especial URL plano (fuera de tabla)
       if (field.type === "url") {
         const u = document.getElementById(`${field.id}_url`);
         const t = document.getElementById(`${field.id}_text`);
@@ -470,15 +505,12 @@ export class DocumentEditor {
           };
         return;
       }
+
       const input = document.getElementById(field.id);
       if (input) {
         if (field.type === "boolean") formData[field.id] = input.checked;
         else if (["number", "currency", "percentage"].includes(field.type)) {
           let val = input.value;
-          try {
-            if (/[\+\-\*\/]/.test(val))
-              val = new Function('"use strict";return (' + val + ")")();
-          } catch (e) {}
           formData[field.id] = val === "" || isNaN(val) ? null : Number(val);
         } else if (field.type === "table") {
           try {
@@ -501,35 +533,26 @@ export class DocumentEditor {
 
     if (isLoading) {
       btn.disabled = true;
-      btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ${message}`;
-      btn.classList.add("opacity-80", "cursor-wait");
+      btn.innerHTML = `<i class="fas fa-circle-notch fa-spin mr-2"></i> ${message}`;
+      btn.classList.add("opacity-75", "cursor-wait");
     } else {
       btn.disabled = false;
-      btn.innerHTML = `<i class="fas fa-save mr-2"></i> ${
-        this.isEditing ? "Guardar Cambios" : "Crear Documento"
-      }`;
-      btn.classList.remove("opacity-80", "cursor-wait");
-    }
-
-    const container = document.getElementById("dynamicFormContainer");
-    if (container) {
-      const elements = container.querySelectorAll(
-        "input, textarea, select, button"
-      );
-      elements.forEach((el) => (el.disabled = isLoading));
-      container.style.opacity = isLoading ? "0.7" : "1";
+      const icon = this.isEditing ? "fa-sync-alt" : "fa-save";
+      const text = this.isEditing ? "Actualizar" : "Guardar";
+      btn.innerHTML = `<i class="fas ${icon} mr-2"></i> ${text}`;
+      btn.classList.remove("opacity-75", "cursor-wait");
     }
   }
 
   renderError(msg) {
     document.getElementById("editorContainer").innerHTML = `
-        <div class="p-8 text-center">
-            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 text-red-500 mb-4">
-                <i class="fas fa-times text-2xl"></i>
+        <div class="p-8 text-center bg-white rounded-3xl border border-red-100 shadow-xl">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-50 text-red-500 mb-4 animate-bounce">
+                <i class="fas fa-bug text-2xl"></i>
             </div>
-            <h3 class="text-xl font-bold text-slate-800 mb-2">Error de Carga</h3>
+            <h3 class="text-xl font-bold text-slate-800 mb-2">Algo salió mal</h3>
             <p class="text-slate-500 mb-6">${msg}</p>
-            <button id="cancelDocBtn" class="px-6 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition">Volver</button>
+            <button id="cancelDocBtn" class="px-6 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition font-bold">Volver</button>
         </div>
     `;
     document

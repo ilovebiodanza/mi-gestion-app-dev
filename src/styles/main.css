@@ -1,59 +1,58 @@
 /* src/styles/main.css */
 
-/* --- Overrides para Librerías Externas --- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* SortableJS Ghost State */
+/* --- SortableJS --- */
 .sortable-ghost {
-  opacity: 0.5;
-  background-color: #f1f5f9; /* slate-100 */
-  border: 2px dashed #94a3b8; /* slate-400 */
+  @apply opacity-40 bg-indigo-50 border-2 border-dashed border-indigo-300 rounded-lg;
+}
+
+.sortable-drag {
+  @apply cursor-grabbing shadow-2xl scale-105 rotate-2 bg-white ring-2 ring-primary ring-opacity-50 !important;
 }
 
 .drag-handle {
-  cursor: grab;
-}
-.drag-handle:active {
-  cursor: grabbing;
+  @apply cursor-grab active:cursor-grabbing touch-none;
 }
 
-/* --- Estilos de Impresión (Mantenidos y optimizados) --- */
+/* --- Impresión --- */
 @media print {
   @page {
-    margin: 2cm;
+    margin: 1.5cm;
   }
 
-  body * {
-    visibility: hidden;
+  body {
+    @apply bg-white text-black;
   }
 
-  /* Ocultar elementos de UI */
+  /* Ocultar UI */
   nav,
   button,
   .no-print,
-  .shadow-lg,
-  .bg-gradient-to-br {
+  .shadow-xl,
+  .bg-gradient-to-br,
+  .fixed {
     display: none !important;
   }
 
-  /* Mostrar solo el documento */
-  #documentCard,
+  /* Resetear contenedores para impresión */
+  #app,
+  main,
+  #dynamicContent {
+    @apply w-full h-auto m-0 p-0 overflow-visible static bg-transparent !important;
+  }
+
+  /* Documento específico */
+  #documentCard {
+    @apply absolute top-0 left-0 w-full m-0 p-0 border-none shadow-none bg-white visible !important;
+  }
+
   #documentCard * {
     visibility: visible;
   }
 
-  #documentCard {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    border: none;
-    box-shadow: none;
-    background: white;
-  }
-
-  /* Asegurar impresión de colores de fondo (etiquetas, headers de tablas) */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
