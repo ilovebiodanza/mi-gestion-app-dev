@@ -359,20 +359,38 @@ export class DocumentViewer {
       // 3. Secretos (Reveal/Hide)
       const toggleBtn = e.target.closest(".toggle-secret-btn");
       if (toggleBtn) {
-        const wrapper = toggleBtn.parentElement;
-        const mask = wrapper.querySelector(".secret-mask");
-        const revealed = wrapper.querySelector(".secret-revealed");
-        const icon = toggleBtn.querySelector("i");
-        if (revealed.classList.contains("hidden")) {
-          mask.classList.add("hidden");
-          revealed.classList.remove("hidden");
-          icon.className = "fas fa-eye-slash";
-          toggleBtn.classList.add("text-primary");
-        } else {
-          mask.classList.remove("hidden");
-          revealed.classList.add("hidden");
-          icon.className = "fas fa-eye";
-          toggleBtn.classList.remove("text-primary");
+        // 1. BUSCAR WRAPPER: Buscamos hacia arriba hasta encontrar el contenedor que tiene la máscara
+        // Esto funciona tanto para el diseño "Tarjeta" como para el nuevo diseño "Tabla Minimalista"
+        let wrapper = toggleBtn.parentElement;
+        while (wrapper && !wrapper.querySelector(".secret-mask")) {
+          wrapper = wrapper.parentElement;
+        }
+
+        if (wrapper) {
+          const mask = wrapper.querySelector(".secret-mask");
+          const revealed = wrapper.querySelector(".secret-revealed");
+          const icon = toggleBtn.querySelector("i");
+
+          if (revealed.classList.contains("hidden")) {
+            // MOSTRAR
+            mask.classList.add("hidden");
+            revealed.classList.remove("hidden");
+
+            // Cambiar icono manteniendo el tamaño original (si tiene text-[10px] lo respeta)
+            icon.classList.remove("fa-eye");
+            icon.classList.add("fa-eye-slash");
+
+            toggleBtn.classList.add("text-indigo-600"); // Color activo
+          } else {
+            // OCULTAR
+            mask.classList.remove("hidden");
+            revealed.classList.add("hidden");
+
+            icon.classList.remove("fa-eye-slash");
+            icon.classList.add("fa-eye");
+
+            toggleBtn.classList.remove("text-indigo-600");
+          }
         }
       }
 
@@ -553,23 +571,31 @@ export class DocumentViewer {
   }
 
   openRowModal(fieldId, rowIndex) {
-    // ... (Código original)
     const field = this.template.fields.find((f) => f.id === fieldId);
     if (!field) return;
+
     const rowsOriginal = this.decryptedData[fieldId] || [];
     const rowsProcessed = this.getProcessedRows(field, rowsOriginal);
     const rowData = rowsProcessed[rowIndex];
+
     const content = field.columns
       .map(
         (col) =>
-          `<div class="py-3 border-b border-slate-100 last:border-0"><p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">${
-            col.label || col.name
-          }</p><div class="text-slate-800 text-sm break-words">${this.renderFieldValue(
-            col.type,
-            rowData[col.id]
-          )}</div></div>`
+          `<div class="py-3 border-b border-slate-100 last:border-0">
+                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    ${col.label || col.name}
+                </p>
+                <div class="text-slate-800 text-sm break-words">
+                    ${this.renderFieldValue(
+                      col.type,
+                      rowData[col.id],
+                      col.type === "secret" // <--- AQUÍ ESTÁ EL CAMBIO
+                    )}
+                </div>
+           </div>`
       )
       .join("");
+
     document.getElementById("rowDetailContent").innerHTML = content;
     document.getElementById("rowDetailModal").classList.remove("hidden");
   }

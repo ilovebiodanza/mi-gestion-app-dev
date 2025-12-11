@@ -44,7 +44,8 @@ export function renderCellInput(col, val) {
     return `
         <div class="relative group p-1">
             <div class="flex items-center bg-slate-50 rounded-lg border border-slate-200 focus-within:border-secondary focus-within:bg-white transition-colors">
-                <input type="password" class="${commonClass} rounded-lg" data-col-id="${col.id}" value="${value}" placeholder="••••">
+                <input type="password" class="${commonClass} rounded-lg cell-input" data-col-id="${col.id}" value="${value}" placeholder="••••">
+                
                 <button type="button" class="toggle-pass-cell px-3 text-slate-400 hover:text-secondary focus:outline-none" tabindex="-1">
                     <i class="fas fa-eye text-xs"></i>
                 </button>

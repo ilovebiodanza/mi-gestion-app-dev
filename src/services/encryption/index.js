@@ -20,10 +20,6 @@ class EncryptionService {
     }
   }
 
-  isReady() {
-    return !!this.masterKey;
-  }
-
   clearKey() {
     this.masterKey = null;
     this.userId = null;
@@ -63,16 +59,48 @@ class EncryptionService {
     return await encryptData(data, keyToUse);
   }
 
-  async decryptDocument(encryptedData, specificKey = null) {
-    const keyToUse = specificKey || this.masterKey;
-    if (!keyToUse) throw new Error("Bóveda cerrada (Decrypt).");
+  /**
+   * Intenta descifrar el documento.
+   * IMPORTANTE: Si falla, bloquea la bóveda para obligar a pedir la clave de nuevo.
+   */
+  isReady() {
+    // CORRECCIÓN: Verificar ambas cosas.
+    // Que la bandera diga true Y que la llave realmente exista en memoria.
+    return this.isUnlocked === true && this.key !== null;
+  }
 
-    if (!encryptedData || !encryptedData.iv || !encryptedData.content) {
-      // Retornamos el dato tal cual si no parece cifrado (fallback legacy)
-      return encryptedData;
+  lock() {
+    console.log("🔒 Bloqueando bóveda (Limpieza de memoria)...");
+    this.key = null;
+    this.isUnlocked = false; // <--- ESTO ES CRÍTICO
+
+    // Si tienes algún sistema de notificación o evento, dispáralo aquí
+    // if (this.notifyChange) this.notifyChange();
+  }
+
+  async decryptDocument(encryptedData) {
+    // 1. Validación de seguridad previa
+    if (!this.isReady()) {
+      // Si entra aquí, es porque la llave se borró. Lanzamos error para que la UI lo atrape
+      throw new Error("La bóveda está bloqueada. Se requiere contraseña.");
     }
 
-    return await decryptData(encryptedData, keyToUse);
+    try {
+      // 2. Intentar desencriptar
+      const decrypted = await decryptData(encryptedData, this.key);
+      return decrypted;
+    } catch (error) {
+      console.error(
+        "❌ Fallo de desencriptado (Posible clave errónea):",
+        error
+      );
+
+      // 3. AUTO-BLOQUEO
+      // Si falla la criptografía, la llave en memoria NO SIRVE. La matamos.
+      this.lock();
+
+      throw new Error("Contraseña incorrecta o datos corruptos.");
+    }
   }
 }
 

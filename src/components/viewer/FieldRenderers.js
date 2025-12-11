@@ -94,9 +94,30 @@ export function renderPercentage(value) {
 }
 
 export function renderSecret(value, isTableContext) {
+  if (!value) return '<span class="text-slate-300 text-xs italic">--</span>';
+
+  // CASO 1: VISTA DE TABLA (Minimalista)
   if (isTableContext) {
-    return `<div class="group cursor-pointer select-none"><span class="blur-sm group-hover:blur-none transition-all font-mono text-xs bg-slate-100 px-1 rounded">••••••</span></div>`;
+    return `
+        <div class="group/secret flex items-center gap-2 select-none h-full">
+            <div class="relative font-mono text-xs text-slate-500">
+                <span class="secret-mask tracking-widest align-middle">••••••</span>
+                <span class="secret-revealed hidden font-bold text-slate-800 align-middle">${value}</span>
+            </div>
+
+            <div class="flex items-center gap-0.5 opacity-0 group-hover/secret:opacity-100 transition-opacity duration-200">
+                <button type="button" class="toggle-secret-btn w-6 h-6 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors" title="Mostrar/Ocultar">
+                    <i class="fas fa-eye text-[10px]"></i>
+                </button>
+
+                <button type="button" class="copy-btn w-6 h-6 flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-slate-100 rounded transition-colors" data-value="${value}" title="Copiar">
+                    <i class="far fa-copy text-[10px]"></i>
+                </button>
+            </div>
+        </div>`;
   }
+
+  // CASO 2: VISTA DE TARJETA (Se mantiene el diseño grande original)
   return `
         <div class="flex items-center gap-2">
             <div class="relative group overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2 transition-all hover:border-indigo-200 hover:shadow-sm w-full">
