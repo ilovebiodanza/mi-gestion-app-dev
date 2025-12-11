@@ -1,9 +1,8 @@
 // src/components/DocumentViewer.js
-
 import { documentService } from "../services/documents/index.js";
 import { templateService } from "../services/templates/index.js";
 import { encryptionService } from "../services/encryption/index.js";
-import { getLocalCurrency } from "../utils/helpers.js";
+import { getLocalCurrency, detectMediaType } from "../utils/helpers.js"; // <--- Importamos detectMediaType
 
 export class DocumentViewer {
   constructor(docId, onBack) {
@@ -22,7 +21,6 @@ export class DocumentViewer {
 
   async load() {
     this.renderLoading();
-
     if (!encryptionService.isReady()) {
       if (window.app && window.app.requireEncryption) {
         window.app.requireEncryption(() => this.load());
@@ -31,20 +29,16 @@ export class DocumentViewer {
       this.renderError("Sistema de cifrado no disponible.");
       return;
     }
-
     try {
       this.document = await documentService.getDocumentById(this.docId);
       this.template = await templateService.getTemplateById(
         this.document.templateId
       );
-
       if (!this.template)
         throw new Error("La plantilla original ya no existe.");
-
       this.decryptedData = await encryptionService.decryptDocument(
         this.document.encryptedContent
       );
-
       this.template.fields.forEach((f) => {
         if (f.type === "table")
           this.tableStates[f.id] = {
@@ -53,7 +47,6 @@ export class DocumentViewer {
             sortDir: "asc",
           };
       });
-
       this.renderContent();
     } catch (error) {
       console.error(error);
@@ -64,7 +57,6 @@ export class DocumentViewer {
   renderContent() {
     const container = document.getElementById("documentViewerPlaceholder");
     if (!container) return;
-
     const updatedAt = new Date(
       this.document.metadata.updatedAt
     ).toLocaleDateString("es-ES", {
@@ -75,15 +67,14 @@ export class DocumentViewer {
       minute: "2-digit",
     });
 
-    // --- GENERACIÓN DEL GRID DE CAMPOS ---
     const fieldsHtml = this.template.fields
       .map((field, index) => {
-        // 1. Determinar si ocupa ancho completo (2 columnas) o normal (1 columna)
-        // Tipos anchos: Separador, Tabla, Texto Largo (textarea), URL
+        // Configuración de Grid
         const isFullWidth = ["separator", "table", "text"].includes(field.type);
-        const spanClass = isFullWidth ? "md:col-span-2" : "md:col-span-1";
+        const spanClass = isFullWidth
+          ? "col-span-1 md:col-span-2 print:col-span-2"
+          : "col-span-1";
 
-        // 2. CASO ESPECIAL: SEPARADOR
         if (field.type === "separator") {
           return `
             <div class="${spanClass} mt-6 mb-2 border-b border-slate-200 pb-2 flex items-center gap-3">
@@ -93,23 +84,17 @@ export class DocumentViewer {
           `;
         }
 
-        // 3. Renderizar valor
         const value = this.decryptedData[field.id];
-
-        // Caso Tabla
-        if (field.type === "table") {
+        if (field.type === "table")
           return `<div class="${spanClass}">${this.renderTableField(
             field,
             value
           )}</div>`;
-        }
 
-        // Caso Campos Normales
         const displayValue = this.renderFieldValue(field.type, value);
 
-        // Estilo de "Caja" (Label arriba, valor abajo) para el Grid
         return `
-        <div class="${spanClass} bg-slate-50/50 rounded-xl p-4 border border-slate-100 hover:bg-slate-50 hover:shadow-sm transition-all group">
+        <div class="${spanClass} bg-slate-50/50 rounded-xl p-4 border border-slate-100 hover:bg-slate-50 hover:shadow-sm transition-all group print:break-inside-avoid print:bg-white print:border-slate-300">
           <dt class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5 flex items-center gap-2">
              ${field.label}
           </dt>
@@ -124,69 +109,41 @@ export class DocumentViewer {
     container.innerHTML = `
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 no-print">
          <button id="backBtn" class="group flex items-center text-slate-500 hover:text-primary transition-colors font-medium">
-            <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-2 shadow-sm group-hover:-translate-x-1 transition-transform">
-                <i class="fas fa-arrow-left text-xs"></i>
-            </div>
+            <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center mr-2 shadow-sm group-hover:-translate-x-1 transition-transform"><i class="fas fa-arrow-left text-xs"></i></div>
             <span>Volver</span>
          </button>
-         
          <div class="flex items-center gap-2 self-end sm:self-auto bg-white p-1.5 rounded-xl shadow-sm border border-slate-200">
-            <button id="whatsappDocBtn" class="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="WhatsApp">
-               <i class="fab fa-whatsapp text-lg"></i>
-            </button>
-            <button id="pdfDocBtn" class="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" title="Imprimir / PDF">
-               <i class="fas fa-print text-lg"></i>
-            </button>
+            <button id="whatsappDocBtn" class="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="WhatsApp"><i class="fab fa-whatsapp text-lg"></i></button>
+            <button id="pdfDocBtn" class="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors" title="Imprimir"><i class="fas fa-print text-lg"></i></button>
             <div class="h-6 w-px bg-slate-100 mx-1"></div>
-            <button id="deleteDocBtn" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
-               <i class="far fa-trash-alt text-lg"></i>
-            </button>
-            <button id="editDocBtn" class="flex items-center px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg shadow-md hover:shadow-lg transition-all text-sm font-bold ml-1">
-               <i class="fas fa-pen mr-2 text-xs"></i> <span>Editar</span>
-            </button>
+            <button id="deleteDocBtn" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><i class="far fa-trash-alt text-lg"></i></button>
+            <button id="editDocBtn" class="flex items-center px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg shadow-md hover:shadow-lg transition-all text-sm font-bold ml-1"><i class="fas fa-pen mr-2 text-xs"></i> <span>Editar</span></button>
          </div>
       </div>
 
       <div id="documentCard" class="bg-white rounded-3xl shadow-2xl shadow-slate-200/60 border border-slate-100 overflow-hidden relative print:shadow-none print:border-none">
-        
         <div class="relative px-8 py-10 overflow-hidden">
              <div class="absolute inset-0 opacity-10" style="background-color: ${this.template.color}"></div>
              <div class="absolute top-0 left-0 w-full h-1.5" style="background-color: ${this.template.color}"></div>
-
              <div class="relative z-10 flex gap-6 items-start">
-                <div class="flex-shrink-0 w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-lg bg-white text-gradient" 
-                     style="color: ${this.template.color}">
-                   ${this.template.icon}
-                </div>
+                <div class="flex-shrink-0 w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shadow-lg bg-white text-gradient" style="color: ${this.template.color}">${this.template.icon}</div>
                 <div>
-                   <h1 class="text-2xl sm:text-4xl font-extrabold text-slate-800 tracking-tight leading-tight mb-2">
-                     ${this.document.metadata.title}
-                   </h1>
+                   <h1 class="text-2xl sm:text-4xl font-extrabold text-slate-800 tracking-tight leading-tight mb-2">${this.document.metadata.title}</h1>
                    <div class="flex flex-wrap items-center gap-3 text-sm">
-                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg font-bold text-xs uppercase tracking-wide bg-white/60 border border-slate-200/50 text-slate-600 backdrop-blur-sm">
-                        ${this.template.name}
-                      </span>
-                      <span class="text-slate-400 flex items-center text-xs">
-                        <i class="far fa-clock mr-1.5"></i> Actualizado: ${updatedAt}
-                      </span>
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg font-bold text-xs uppercase tracking-wide bg-white/60 border border-slate-200/50 text-slate-600 backdrop-blur-sm">${this.template.name}</span>
+                      <span class="text-slate-400 flex items-center text-xs"><i class="far fa-clock mr-1.5"></i> Actualizado: ${updatedAt}</span>
                    </div>
                 </div>
              </div>
         </div>
-
         <div class="p-6 sm:p-8">
-           <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
+           <dl class="grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-6">
               ${fieldsHtml}
            </dl>
         </div>
-
         <div class="bg-slate-50 px-8 py-4 border-t border-slate-100 flex items-center justify-between mt-4">
-           <div class="flex items-center text-emerald-600 text-xs font-bold uppercase tracking-wider">
-              <i class="fas fa-shield-alt mr-2 text-lg"></i> Cifrado E2EE Verificado
-           </div>
-           <div class="hidden sm:block text-slate-300 text-[10px] font-mono">
-              UUID: ${this.document.id}
-           </div>
+           <div class="flex items-center text-emerald-600 text-xs font-bold uppercase tracking-wider"><i class="fas fa-shield-alt mr-2 text-lg"></i> Cifrado E2EE Verificado</div>
+           <div class="hidden sm:block text-slate-300 text-[10px] font-mono">UUID: ${this.document.id}</div>
         </div>
       </div>
 
@@ -202,11 +159,26 @@ export class DocumentViewer {
             </div>
          </div>
       </div>
-    `;
 
+      <div id="mediaModal" class="fixed inset-0 z-[60] hidden">
+         <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-md transition-opacity" id="mediaModalBackdrop"></div>
+         <div class="relative w-full h-full flex items-center justify-center p-4">
+             <button id="closeMediaModal" class="absolute top-4 right-4 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 w-10 h-10 rounded-full flex items-center justify-center transition backdrop-blur-sm z-50">
+                <i class="fas fa-times text-xl"></i>
+             </button>
+             <div class="relative max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl animate-scale-in">
+                 <img id="mediaModalImage" src="" alt="Vista previa" class="max-w-full max-h-[90vh] object-contain bg-black/50" />
+                 <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white text-center opacity-0 hover:opacity-100 transition-opacity">
+                    <a id="mediaModalLink" href="#" target="_blank" class="text-sm hover:underline text-white/90">Abrir original en nueva pestaña</a>
+                 </div>
+             </div>
+         </div>
+      </div>
+    `;
     this.setupContentListeners();
   }
 
+  // --- RENDERING INTELIGENTE ---
   renderFieldValue(type, value, isTableContext = false) {
     if (
       value === undefined ||
@@ -217,11 +189,76 @@ export class DocumentViewer {
     }
 
     switch (type) {
+      case "url":
+        let url = typeof value === "object" ? value.url : value;
+        let text = typeof value === "object" ? value.text || url : value;
+        if (!url) return '<span class="text-slate-300 italic">--</span>';
+
+        // Detección de Multimedia
+        const mediaType = detectMediaType(url);
+
+        // 1. IMAGEN
+        if (mediaType === "image") {
+          const display = text === url ? "Ver Imagen" : text;
+          if (isTableContext) {
+            return `<button class="view-media-btn inline-flex items-center gap-1.5 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-colors" data-src="${url}" data-type="image">
+                          <i class="fas fa-image"></i> <span>Imagen</span>
+                        </button>`;
+          }
+          return `
+                <div class="flex items-center gap-3">
+                    <div class="relative group cursor-pointer view-media-btn overflow-hidden rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all bg-slate-50" data-src="${url}" data-type="image">
+                        <div class="h-16 w-24 bg-slate-200 flex items-center justify-center text-slate-400 group-hover:scale-105 transition-transform duration-500">
+                            <i class="fas fa-image text-2xl"></i>
+                        </div>
+                        <div class="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors">
+                            <i class="fas fa-search-plus text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-700 text-sm">${display}</p>
+                        <a href="${url}" target="_blank" class="text-xs text-blue-500 hover:underline flex items-center gap-1 mt-0.5">
+                            Abrir enlace <i class="fas fa-external-link-alt text-[10px]"></i>
+                        </a>
+                    </div>
+                </div>`;
+        }
+
+        // 2. AUDIO
+        if (mediaType === "audio") {
+          const display = text === url ? "Archivo de Audio" : text;
+          if (isTableContext) {
+            return `<a href="${url}" target="_blank" class="inline-flex items-center gap-1.5 text-pink-600 hover:underline font-medium"><i class="fas fa-headphones"></i> Audio</a>`;
+          }
+          return `
+                <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm max-w-md">
+                    <div class="flex items-center gap-2 mb-2">
+                        <div class="w-8 h-8 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-music text-xs"></i>
+                        </div>
+                        <p class="text-xs font-bold text-slate-600 truncate">${display}</p>
+                    </div>
+                    <audio controls class="w-full h-8 rounded-lg outline-none custom-audio">
+                        <source src="${url}">
+                        Tu navegador no soporta audio.
+                    </audio>
+                </div>`;
+        }
+
+        // 3. ENLACE NORMAL
+        const displayLink =
+          isTableContext && text.length > 20
+            ? text.substring(0, 18) + "..."
+            : text;
+        return `
+            <a href="${url}" target="_blank" class="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors break-all">
+                <i class="fas fa-link text-xs opacity-50 flex-shrink-0"></i> ${displayLink}
+            </a>`;
+
       case "boolean":
         return value
           ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700"><i class="fas fa-check mr-1"></i> Sí</span>'
           : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500">No</span>';
-
       case "date":
         try {
           const [y, m, d] = String(value).split("-");
@@ -230,64 +267,152 @@ export class DocumentViewer {
         } catch {
           return value;
         }
-
       case "currency":
         const formatted = new Intl.NumberFormat(this.currencyConfig.locale, {
           style: "currency",
           currency: this.currencyConfig.codigo,
         }).format(Number(value));
         return `<span class="font-mono font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">${formatted}</span>`;
-
       case "percentage":
         return `<span class="font-mono font-bold text-slate-700">${value}%</span>`;
-
       case "secret":
-        if (isTableContext) {
+        if (isTableContext)
           return `<div class="group cursor-pointer select-none"><span class="blur-sm group-hover:blur-none transition-all font-mono text-xs bg-slate-100 px-1 rounded">••••••</span></div>`;
-        }
-        return `
-            <div class="flex items-center gap-2">
-              <div class="relative group overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2 transition-all hover:border-indigo-200 hover:shadow-sm w-full">
-                 <span class="secret-mask filter blur-[5px] select-none transition-all duration-300 group-hover:blur-none font-mono text-sm text-slate-800 tracking-wider">••••••••••••••</span>
-                 <span class="secret-revealed hidden font-mono text-sm text-slate-800 select-all font-bold tracking-wide">${value}</span>
-              </div>
-              <button class="toggle-secret-btn w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors bg-white border border-slate-200" title="Revelar">
-                <i class="fas fa-eye"></i>
-              </button>
-              <button class="copy-btn w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors bg-white border border-slate-200" data-value="${value}" title="Copiar">
-                <i class="far fa-copy"></i>
-              </button>
-            </div>`;
-
-      case "url":
-        let url = typeof value === "object" ? value.url : value;
-        let text = typeof value === "object" ? value.text || url : value;
-        if (!url) return '<span class="text-slate-300 italic">--</span>';
-
-        const display =
-          isTableContext && text.length > 20
-            ? text.substring(0, 18) + "..."
-            : text;
-        return `
-            <a href="${url}" target="_blank" class="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors">
-                <i class="fas fa-link text-xs opacity-50"></i> ${display}
-            </a>`;
-
+        return `<div class="flex items-center gap-2"><div class="relative group overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2 transition-all hover:border-indigo-200 hover:shadow-sm w-full"><span class="secret-mask filter blur-[5px] select-none transition-all duration-300 group-hover:blur-none font-mono text-sm text-slate-800 tracking-wider">••••••••••••••</span><span class="secret-revealed hidden font-mono text-sm text-slate-800 select-all font-bold tracking-wide">${value}</span></div><button class="toggle-secret-btn w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors bg-white border border-slate-200" title="Revelar"><i class="fas fa-eye"></i></button><button class="copy-btn w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors bg-white border border-slate-200" data-value="${value}" title="Copiar"><i class="far fa-copy"></i></button></div>`;
       case "text":
         if (isTableContext)
           return value.length > 30 ? value.substring(0, 30) + "..." : value;
         return `<div class="prose prose-sm max-w-none text-slate-600 whitespace-pre-line">${value}</div>`;
-
       default:
         return String(value);
     }
   }
 
+  // --- LISTENERS ---
+  setupContentListeners() {
+    ["backBtn"].forEach((id) =>
+      document
+        .getElementById(id)
+        ?.addEventListener("click", () => this.onBack())
+    );
+    document
+      .getElementById("deleteDocBtn")
+      ?.addEventListener("click", () => this.handleDelete());
+    document
+      .getElementById("editDocBtn")
+      ?.addEventListener("click", () => this.handleEdit());
+    document
+      .getElementById("pdfDocBtn")
+      ?.addEventListener("click", () => window.print());
+    document
+      .getElementById("whatsappDocBtn")
+      ?.addEventListener("click", () => this.handleCopyToWhatsApp());
+
+    const container = document.getElementById("documentViewerPlaceholder");
+
+    // Listeners Tabla
+    container.querySelectorAll(".table-search-input").forEach((input) => {
+      input.addEventListener("input", (e) => {
+        const fieldId = e.target.dataset.fieldId;
+        this.tableStates[fieldId].search = e.target.value;
+        this.updateTableUI(fieldId);
+      });
+    });
+
+    // Delegación General
+    container.addEventListener("click", (e) => {
+      // Sort Tabla
+      const header = e.target.closest(".table-header-sort");
+      if (header) {
+        const fieldId = header.dataset.fieldId;
+        const colId = header.dataset.colId;
+        const state = this.tableStates[fieldId];
+        if (state.sortCol === colId) {
+          state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+        } else {
+          state.sortCol = colId;
+          state.sortDir = "asc";
+        }
+        this.refreshTableFieldHTML(fieldId);
+      }
+
+      // Secretos
+      const toggleBtn = e.target.closest(".toggle-secret-btn");
+      if (toggleBtn) {
+        const wrapper = toggleBtn.parentElement;
+        const mask = wrapper.querySelector(".secret-mask");
+        const revealed = wrapper.querySelector(".secret-revealed");
+        const icon = toggleBtn.querySelector("i");
+        if (revealed.classList.contains("hidden")) {
+          mask.classList.add("hidden");
+          revealed.classList.remove("hidden");
+          icon.className = "fas fa-eye-slash";
+          toggleBtn.classList.add("text-primary");
+        } else {
+          mask.classList.remove("hidden");
+          revealed.classList.add("hidden");
+          icon.className = "fas fa-eye";
+          toggleBtn.classList.remove("text-primary");
+        }
+      }
+      const copyBtn = e.target.closest(".copy-btn");
+      if (copyBtn) {
+        navigator.clipboard.writeText(copyBtn.dataset.value);
+        const icon = copyBtn.querySelector("i");
+        icon.className = "fas fa-check text-emerald-500";
+        setTimeout(() => (icon.className = "far fa-copy"), 1500);
+      }
+
+      // Detalles Fila
+      const viewRowBtn = e.target.closest(".view-row-btn");
+      if (viewRowBtn)
+        this.openRowModal(
+          viewRowBtn.dataset.fieldId,
+          parseInt(viewRowBtn.dataset.rowIndex)
+        );
+
+      // NUEVO: Abrir Imagen en Modal
+      const mediaBtn = e.target.closest(".view-media-btn");
+      if (mediaBtn && mediaBtn.dataset.type === "image") {
+        const src = mediaBtn.dataset.src;
+        const modal = document.getElementById("mediaModal");
+        const img = document.getElementById("mediaModalImage");
+        const link = document.getElementById("mediaModalLink");
+
+        img.src = src;
+        link.href = src;
+        modal.classList.remove("hidden");
+      }
+    });
+
+    // Modales (Row Detail & Media)
+    const rowModal = document.getElementById("rowDetailModal");
+    const closeRowModal = () => rowModal.classList.add("hidden");
+    rowModal
+      ?.querySelectorAll(".close-modal")
+      .forEach((b) => b.addEventListener("click", closeRowModal));
+    document
+      .getElementById("modalBackdrop")
+      ?.addEventListener("click", closeRowModal);
+
+    const mediaModal = document.getElementById("mediaModal");
+    const closeMediaModal = () => {
+      mediaModal.classList.add("hidden");
+      document.getElementById("mediaModalImage").src = ""; // Limpiar src
+    };
+    document
+      .getElementById("closeMediaModal")
+      ?.addEventListener("click", closeMediaModal);
+    document
+      .getElementById("mediaModalBackdrop")
+      ?.addEventListener("click", closeMediaModal);
+  }
+
+  // ... (El resto de métodos auxiliares son idénticos a los anteriores) ...
   renderTableField(field, value) {
     const rows = Array.isArray(value) ? value : [];
     if (rows.length === 0)
       return `<div class="p-6 border border-dashed border-slate-200 rounded-xl bg-slate-50 text-center text-xs text-slate-400 flex flex-col items-center gap-2"><i class="fas fa-table text-xl opacity-20"></i>Tabla vacía</div>`;
-
     const state = this.tableStates[field.id] || {
       search: "",
       sortCol: null,
@@ -296,69 +421,45 @@ export class DocumentViewer {
     const processed = this.getProcessedRows(field, rows);
     const isComplex = field.columns.length > 3;
     const displayCols = isComplex ? field.columns.slice(0, 3) : field.columns;
-
     const headers = displayCols
       .map(
-        (c) => `
-        <th class="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-primary transition select-none table-header-sort" data-field-id="${
-          field.id
-        }" data-col-id="${c.id}">
-            ${c.label} ${
-          state.sortCol === c.id ? (state.sortDir === "asc" ? "↑" : "↓") : ""
-        }
-        </th>`
+        (c) =>
+          `<th class="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider cursor-pointer hover:text-primary transition select-none table-header-sort" data-field-id="${
+            field.id
+          }" data-col-id="${c.id}">${c.label} ${
+            state.sortCol === c.id ? (state.sortDir === "asc" ? "↑" : "↓") : ""
+          }</th>`
       )
       .join("");
-
     const body = processed
       .map(
-        (row, i) => `
-        <tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors last:border-0">
-            ${displayCols
-              .map(
-                (c) =>
-                  `<td class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">${this.renderFieldValue(
-                    c.type,
-                    row[c.id],
-                    true
-                  )}</td>`
-              )
-              .join("")}
-            ${
-              isComplex
-                ? `<td class="px-4 py-3 text-right"><button class="view-row-btn text-primary bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition" data-field-id="${field.id}" data-row-index="${i}"><i class="fas fa-eye text-xs"></i></button></td>`
-                : ""
-            }
-        </tr>`
+        (row, i) =>
+          `<tr class="border-b border-slate-50 hover:bg-slate-50 transition-colors last:border-0">${displayCols
+            .map(
+              (c) =>
+                `<td class="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">${this.renderFieldValue(
+                  c.type,
+                  row[c.id],
+                  true
+                )}</td>`
+            )
+            .join("")}${
+            isComplex
+              ? `<td class="px-4 py-3 text-right"><button class="view-row-btn text-primary bg-indigo-50 hover:bg-indigo-100 p-1.5 rounded-lg transition" data-field-id="${field.id}" data-row-index="${i}"><i class="fas fa-eye text-xs"></i></button></td>`
+              : ""
+          }</tr>`
       )
       .join("");
-
-    return `
-      <div class="col-span-full mt-2 mb-2">
-         <div class="flex items-center justify-between mb-3">
-             <label class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-2">
-                <i class="fas fa-table"></i> ${
-                  field.label
-                } <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[10px]">${
+    return `<div class="col-span-full mt-2 mb-2"><div class="flex items-center justify-between mb-3"><label class="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-2"><i class="fas fa-table"></i> ${
+      field.label
+    } <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[10px]">${
       rows.length
-    }</span>
-             </label>
-             <input type="text" class="table-search-input text-xs border border-slate-200 rounded-lg px-2 py-1.5 w-40 focus:ring-2 focus:ring-primary/20 outline-none bg-slate-50" placeholder="Buscar..." data-field-id="${
-               field.id
-             }">
-         </div>
-         <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-100">
-             <div class="overflow-x-auto">
-                 <table class="min-w-full"><thead class="bg-slate-50/50 border-b border-slate-100"><tr>${headers}${
+    }</span></label><input type="text" class="table-search-input text-xs border border-slate-200 rounded-lg px-2 py-1.5 w-40 focus:ring-2 focus:ring-primary/20 outline-none bg-slate-50" placeholder="Buscar..." data-field-id="${
+      field.id
+    }"></div><div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-100"><div class="overflow-x-auto"><table class="min-w-full"><thead class="bg-slate-50/50 border-b border-slate-100"><tr>${headers}${
       isComplex ? "<th></th>" : ""
-    }</tr></thead>
-                 <tbody>${body}</tbody></table>
-             </div>
-         </div>
-      </div>`;
+    }</tr></thead><tbody>${body}</tbody></table></div></div></div>`;
   }
-
-  // --- Helpers Lógica ---
   getProcessedRows(field, rows) {
     const state = this.tableStates[field.id] || {
       search: "",
@@ -403,89 +504,6 @@ export class DocumentViewer {
     }
     return processed;
   }
-
-  setupContentListeners() {
-    ["backBtn"].forEach((id) =>
-      document
-        .getElementById(id)
-        ?.addEventListener("click", () => this.onBack())
-    );
-    document
-      .getElementById("deleteDocBtn")
-      ?.addEventListener("click", () => this.handleDelete());
-    document
-      .getElementById("editDocBtn")
-      ?.addEventListener("click", () => this.handleEdit());
-    document
-      .getElementById("pdfDocBtn")
-      ?.addEventListener("click", () => window.print());
-    document
-      .getElementById("whatsappDocBtn")
-      ?.addEventListener("click", () => this.handleCopyToWhatsApp());
-    const container = document.getElementById("documentViewerPlaceholder");
-    container.querySelectorAll(".table-search-input").forEach((input) => {
-      input.addEventListener("input", (e) => {
-        const fieldId = e.target.dataset.fieldId;
-        this.tableStates[fieldId].search = e.target.value;
-        this.updateTableUI(fieldId);
-      });
-    });
-    container.addEventListener("click", (e) => {
-      const header = e.target.closest(".table-header-sort");
-      if (header) {
-        const fieldId = header.dataset.fieldId;
-        const colId = header.dataset.colId;
-        const state = this.tableStates[fieldId];
-        if (state.sortCol === colId) {
-          state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
-        } else {
-          state.sortCol = colId;
-          state.sortDir = "asc";
-        }
-        this.refreshTableFieldHTML(fieldId);
-      }
-      const toggleBtn = e.target.closest(".toggle-secret-btn");
-      if (toggleBtn) {
-        const wrapper = toggleBtn.parentElement;
-        const mask = wrapper.querySelector(".secret-mask");
-        const revealed = wrapper.querySelector(".secret-revealed");
-        const icon = toggleBtn.querySelector("i");
-        if (revealed.classList.contains("hidden")) {
-          mask.classList.add("hidden");
-          revealed.classList.remove("hidden");
-          icon.className = "fas fa-eye-slash";
-          toggleBtn.classList.add("text-primary");
-        } else {
-          mask.classList.remove("hidden");
-          revealed.classList.add("hidden");
-          icon.className = "fas fa-eye";
-          toggleBtn.classList.remove("text-primary");
-        }
-      }
-      const copyBtn = e.target.closest(".copy-btn");
-      if (copyBtn) {
-        navigator.clipboard.writeText(copyBtn.dataset.value);
-        const icon = copyBtn.querySelector("i");
-        icon.className = "fas fa-check text-emerald-500";
-        setTimeout(() => (icon.className = "far fa-copy"), 1500);
-      }
-      const viewRowBtn = e.target.closest(".view-row-btn");
-      if (viewRowBtn)
-        this.openRowModal(
-          viewRowBtn.dataset.fieldId,
-          parseInt(viewRowBtn.dataset.rowIndex)
-        );
-    });
-    const modal = document.getElementById("rowDetailModal");
-    const closeModal = () => modal.classList.add("hidden");
-    modal
-      ?.querySelectorAll(".close-modal")
-      .forEach((b) => b.addEventListener("click", closeModal));
-    document
-      .getElementById("modalBackdrop")
-      ?.addEventListener("click", closeModal);
-  }
-
   updateTableUI(fieldId) {
     const field = this.template.fields.find((f) => f.id === fieldId);
     const rows = this.decryptedData[fieldId] || [];
@@ -572,8 +590,8 @@ export class DocumentViewer {
     try {
       let waText = `*${this.document.metadata.title}*\n_${this.template.name}_\n\n`;
       this.template.fields.forEach((field, index) => {
-        if (index === 0) return;
         const value = this.decryptedData[field.id];
+        if (field.type === "separator") return;
         if (field.type === "table") {
           const rows = Array.isArray(value) ? value : [];
           waText += `*${field.label}:* ${

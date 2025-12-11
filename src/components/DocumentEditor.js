@@ -76,9 +76,8 @@ export class DocumentEditor {
       return `<div id="editorContainer" class="p-8 text-center bg-red-50 rounded-2xl text-red-600 font-bold border border-red-100">Error: Plantilla no definida.</div>`;
     }
 
-    const title = this.isEditing
-      ? `Editando: ${this.documentMetadata?.title || this.template.name}`
-      : `Nuevo Documento: ${this.template.name}`;
+    // Título inicial (si es edición viene de metadata, si es nuevo se deja vacío o default)
+    const initialTitle = this.isEditing ? this.documentMetadata?.title : ""; // Vacío para obligar al usuario a escribir, o poner "Nuevo Registro"
 
     const submitText = this.isEditing ? "Actualizar" : "Guardar";
     const submitIcon = this.isEditing ? "fa-sync-alt" : "fa-save";
@@ -87,28 +86,31 @@ export class DocumentEditor {
     return `
       <div id="editorContainer" class="max-w-4xl mx-auto bg-white rounded-3xl shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden animate-fade-in-up mb-20 relative">
         
-        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center sticky top-0 z-30 bg-white/90 backdrop-blur-md transition-all shadow-sm">
-          <div class="flex items-center gap-4 overflow-hidden">
-            <div class="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-inner" 
+        <div class="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center sticky top-0 z-30 bg-white/90 backdrop-blur-md transition-all shadow-sm gap-4">
+          
+          <div class="flex items-center gap-4 w-full sm:w-auto overflow-hidden flex-1 mr-4">
+            <div class="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-inner" 
                  style="background-color: ${this.template.color}15; color: ${
       this.template.color
     }">
                 ${this.template.icon}
             </div>
-            <div class="min-w-0">
-              <h2 class="text-lg font-bold text-slate-800 truncate">${title}</h2>
-              <p class="text-xs text-slate-400 font-medium flex items-center gap-1">
-                 <i class="fas fa-shield-alt text-emerald-500"></i> Cifrado E2EE
-              </p>
+            <div class="flex-1">
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Identificación del Registro</label>
+              <input type="text" id="documentTitleInput" 
+                     class="w-full bg-transparent border-none p-0 text-lg font-bold text-slate-800 placeholder-slate-300 focus:ring-0 focus:outline-none truncate" 
+                     placeholder="Ej: Tarjeta de Crédito Banesco" 
+                     value="${initialTitle}" required autofocus>
             </div>
           </div>
-          <div class="flex items-center gap-2">
-             <button id="cancelDocBtn" class="p-2 sm:px-4 sm:py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition font-medium text-sm">
+
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+             <button id="cancelDocBtn" class="flex-1 sm:flex-none p-2 sm:px-4 sm:py-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition font-medium text-sm border border-transparent hover:border-slate-200">
                 <span class="hidden sm:inline">Cancelar</span>
-                <span class="sm:hidden"><i class="fas fa-times"></i></span>
+                <span class="sm:hidden">Cancelar</span>
              </button>
-             <button id="saveDocBtn" class="px-4 py-2 bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary-hover text-white rounded-xl shadow-lg shadow-indigo-500/30 font-bold transition-all transform active:scale-95 flex items-center gap-2 text-sm">
-               <i class="fas ${submitIcon}"></i> <span class="hidden sm:inline">${submitText}</span>
+             <button id="saveDocBtn" class="flex-1 sm:flex-none px-6 py-2.5 bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary-hover text-white rounded-xl shadow-lg shadow-indigo-500/30 font-bold transition-all transform active:scale-95 flex items-center justify-center gap-2 text-sm">
+               <i class="fas ${submitIcon}"></i> <span>${submitText}</span>
              </button>
           </div>
         </div>
@@ -144,6 +146,10 @@ export class DocumentEditor {
                 grid-column: span 2;
             }
         }
+        /* Estilo para placeholder del título si está vacío */
+        #documentTitleInput:placeholder-shown {
+            font-style: italic;
+        }
       </style>
     `;
   }
@@ -161,45 +167,40 @@ export class DocumentEditor {
     this.setupTableInteractivity();
   }
 
+  // ... (setupTableInteractivity, attachRowListeners, updateHiddenTableInput, setupMathCalculations, evaluateMathInput SE MANTIENEN IGUALES)
+  // Copia esos métodos del archivo original que subiste, no cambian.
+  // ...
+
+  // MÉTODOS AUXILIARES (REPETIR CÓDIGO EXISTENTE PARA COMPLETITUD SI LO NECESITAS)
   setupTableInteractivity() {
     const containers = document.querySelectorAll(".table-input-container");
-
     containers.forEach((container) => {
-      // Estilización del contenedor de tabla
       container.className =
         "table-input-container w-full overflow-hidden border border-slate-200 rounded-2xl bg-white shadow-sm ring-1 ring-slate-100";
-
       const fieldId = container.dataset.fieldId;
       const hiddenInput = container.querySelector(`#${fieldId}`);
       const tbody = container.querySelector(".table-body");
       const addBtn = container.querySelector(".add-row-btn");
-
       if (addBtn) {
         addBtn.className =
           "add-row-btn w-full py-3 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 font-bold text-xs uppercase tracking-wider transition-colors border-t border-slate-100 flex items-center justify-center gap-2 group";
         addBtn.innerHTML =
           '<i class="fas fa-plus-circle group-hover:scale-110 transition-transform"></i> Agregar Registro';
       }
-
       const thead = container.querySelector("thead");
       if (thead)
         thead.className =
           "bg-slate-50/80 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100";
-
       const ths = container.querySelectorAll("th");
       ths.forEach((th) => (th.className = "px-4 py-3 text-left tracking-wide"));
-
       let columnsDef = [];
       try {
         columnsDef = JSON.parse(container.nextElementSibling.textContent);
       } catch (e) {}
-
-      // --- Renderizador de Celdas (Inputs internos) ---
       const renderCellInput = (col, val) => {
         const commonClass =
           "w-full text-sm border-0 bg-transparent focus:ring-0 p-2 placeholder-slate-300 font-medium text-slate-700";
         const value = val !== undefined && val !== null ? val : "";
-
         if (col.type === "url") {
           let urlVal = val?.url || (typeof val === "string" ? val : "") || "";
           let textVal = val?.text || "";
@@ -207,42 +208,16 @@ export class DocumentEditor {
             url: urlVal,
             text: textVal,
           }).replace(/"/g, "&quot;");
-
-          return `
-             <div class="url-cell-group min-w-[200px] space-y-1.5 p-1">
-                 <input type="hidden" class="cell-input url-json-store" data-col-id="${col.id}" value="${jsonValue}">
-                 <div class="flex items-center bg-slate-50 rounded-lg border border-slate-200 px-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all">
-                     <i class="fas fa-link text-[10px] text-slate-400 mr-2"></i>
-                     <input type="text" class="url-part-link w-full bg-transparent border-none text-xs py-1.5 focus:ring-0 text-blue-600 placeholder-slate-400 font-mono" placeholder="https://..." value="${urlVal}">
-                 </div>
-                 <div class="flex items-center bg-white rounded-lg border border-slate-200 px-2 focus-within:border-slate-300 transition-colors">
-                     <i class="fas fa-font text-[10px] text-slate-300 mr-2"></i>
-                     <input type="text" class="url-part-text w-full bg-transparent border-none text-xs py-1.5 focus:ring-0 text-slate-600 placeholder-slate-300" placeholder="Texto descriptivo" value="${textVal}">
-                 </div>
-             </div>`;
+          return `<div class="url-cell-group min-w-[200px] space-y-1.5 p-1"><input type="hidden" class="cell-input url-json-store" data-col-id="${col.id}" value="${jsonValue}"><div class="flex items-center bg-slate-50 rounded-lg border border-slate-200 px-2 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 transition-all"><i class="fas fa-link text-[10px] text-slate-400 mr-2"></i><input type="text" class="url-part-link w-full bg-transparent border-none text-xs py-1.5 focus:ring-0 text-blue-600 placeholder-slate-400 font-mono" placeholder="https://..." value="${urlVal}"></div><div class="flex items-center bg-white rounded-lg border border-slate-200 px-2 focus-within:border-slate-300 transition-colors"><i class="fas fa-font text-[10px] text-slate-300 mr-2"></i><input type="text" class="url-part-text w-full bg-transparent border-none text-xs py-1.5 focus:ring-0 text-slate-600 placeholder-slate-300" placeholder="Texto descriptivo" value="${textVal}"></div></div>`;
         }
-
         if (col.type === "secret") {
-          return `
-            <div class="relative group p-1">
-                <div class="flex items-center bg-slate-50 rounded-lg border border-slate-200 focus-within:border-secondary focus-within:bg-white transition-colors">
-                    <input type="password" class="${commonClass} rounded-lg" data-col-id="${col.id}" value="${value}" placeholder="••••">
-                    <button type="button" class="toggle-pass-cell px-3 text-slate-400 hover:text-secondary focus:outline-none" tabindex="-1">
-                        <i class="fas fa-eye text-xs"></i>
-                    </button>
-                </div>
-            </div>`;
+          return `<div class="relative group p-1"><div class="flex items-center bg-slate-50 rounded-lg border border-slate-200 focus-within:border-secondary focus-within:bg-white transition-colors"><input type="password" class="${commonClass} rounded-lg" data-col-id="${col.id}" value="${value}" placeholder="••••"><button type="button" class="toggle-pass-cell px-3 text-slate-400 hover:text-secondary focus:outline-none" tabindex="-1"><i class="fas fa-eye text-xs"></i></button></div></div>`;
         }
-
         if (col.type === "boolean") {
-          return `
-            <div class="flex justify-center items-center h-full py-2">
-                <input type="checkbox" class="w-5 h-5 text-primary border-slate-300 rounded focus:ring-primary cursor-pointer cell-input transition-all" data-col-id="${
-                  col.id
-                }" ${value ? "checked" : ""}>
-            </div>`;
+          return `<div class="flex justify-center items-center h-full py-2"><input type="checkbox" class="w-5 h-5 text-primary border-slate-300 rounded focus:ring-primary cursor-pointer cell-input transition-all" data-col-id="${
+            col.id
+          }" ${value ? "checked" : ""}></div>`;
         }
-
         if (col.type === "select") {
           const opts = (col.options || [])
             .map(
@@ -254,7 +229,6 @@ export class DocumentEditor {
             .join("");
           return `<div class="p-1"><select class="${commonClass} bg-slate-50 rounded-lg cursor-pointer cell-input" data-col-id="${col.id}"><option value="">--</option>${opts}</select></div>`;
         }
-
         const isNumeric = ["number", "currency", "percentage"].includes(
           col.type
         );
@@ -267,16 +241,12 @@ export class DocumentEditor {
           ? ""
           : "Escribir...";
         const inputType = col.type === "date" ? "date" : "text";
-
         return `<div class="p-1"><input type="${inputType}" class="${inputClass} rounded-lg hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/10 transition-all cell-input" data-col-id="${col.id}" value="${value}" placeholder="${placeholder}"></div>`;
       };
-
-      // --- Renderizador de Fila ---
       const renderRow = (rowData = {}) => {
         const tr = document.createElement("tr");
         tr.className =
           "group border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors";
-
         let tds = "";
         columnsDef.forEach((col) => {
           tds += `<td class="p-1 border-r border-slate-50 last:border-0 align-top">${renderCellInput(
@@ -284,36 +254,20 @@ export class DocumentEditor {
             rowData[col.id]
           )}</td>`;
         });
-
-        tds += `<td class="w-10 text-center p-0 align-middle">
-                    <button type="button" class="remove-row-btn w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all mx-auto flex items-center justify-center opacity-0 group-hover:opacity-100">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </td>`;
-
+        tds += `<td class="w-10 text-center p-0 align-middle"><button type="button" class="remove-row-btn w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all mx-auto flex items-center justify-center opacity-0 group-hover:opacity-100"><i class="fas fa-times"></i></button></td>`;
         tr.innerHTML = tds;
         tbody.appendChild(tr);
-
-        // Listeners internos de la fila
         this.attachRowListeners(tr);
       };
-
-      // Carga inicial
       const initialData = JSON.parse(hiddenInput.value || "[]");
       initialData.forEach((row) => renderRow(row));
-
-      // Botón Agregar
       addBtn.addEventListener("click", () => renderRow({}));
-
-      // Delegación para borrar
       tbody.addEventListener("click", (e) => {
         if (e.target.closest(".remove-row-btn")) {
           e.target.closest("tr").remove();
           this.updateHiddenTableInput(tbody, columnsDef, hiddenInput);
         }
       });
-
-      // Sync global
       tbody.addEventListener("input", () =>
         this.updateHiddenTableInput(tbody, columnsDef, hiddenInput)
       );
@@ -322,7 +276,6 @@ export class DocumentEditor {
       );
     });
   }
-
   attachRowListeners(tr) {
     tr.querySelectorAll(".math-input").forEach((input) => {
       input.addEventListener("blur", () => this.evaluateMathInput(input));
@@ -332,7 +285,6 @@ export class DocumentEditor {
           (e.key === "Enter" || e.key === "=") && this.evaluateMathInput(input)
       );
     });
-
     tr.querySelectorAll(".url-cell-group").forEach((group) => {
       const hidden = group.querySelector(".url-json-store");
       const link = group.querySelector(".url-part-link");
@@ -347,7 +299,6 @@ export class DocumentEditor {
       link.addEventListener("input", sync);
       text.addEventListener("input", sync);
     });
-
     tr.querySelectorAll(".toggle-pass-cell").forEach((btn) => {
       btn.addEventListener("click", () => {
         const input = btn.previousElementSibling;
@@ -364,7 +315,6 @@ export class DocumentEditor {
       });
     });
   }
-
   updateHiddenTableInput(tbody, columnsDef, hiddenInput) {
     const rows = [];
     tbody.querySelectorAll("tr").forEach((tr) => {
@@ -373,7 +323,6 @@ export class DocumentEditor {
         const colId = input.dataset.colId;
         const colDef = columnsDef.find((c) => c.id === colId);
         let val;
-
         if (colDef && colDef.type === "url") {
           try {
             val = JSON.parse(input.value);
@@ -397,7 +346,6 @@ export class DocumentEditor {
     });
     hiddenInput.value = JSON.stringify(rows);
   }
-
   setupMathCalculations() {
     this.template.fields
       .filter((f) => ["number", "currency", "percentage"].includes(f.type))
@@ -405,7 +353,6 @@ export class DocumentEditor {
         const input = document.getElementById(field.id);
         if (!input) return;
         input.classList.add("font-mono", "text-right");
-
         input.addEventListener(
           "keydown",
           (e) =>
@@ -415,7 +362,6 @@ export class DocumentEditor {
         input.addEventListener("blur", () => this.evaluateMathInput(input));
       });
   }
-
   evaluateMathInput(input) {
     const value = input.value.trim();
     if (!value) return;
@@ -425,8 +371,6 @@ export class DocumentEditor {
         if (isFinite(result)) {
           input.value = Math.round(result * 100) / 100;
           input.dispatchEvent(new Event("input", { bubbles: true }));
-
-          // Efecto visual de cálculo
           input.classList.add("text-emerald-600", "font-bold", "bg-emerald-50");
           setTimeout(
             () =>
@@ -442,12 +386,41 @@ export class DocumentEditor {
     }
   }
 
+  // MODIFICADO: handleSave ahora toma el título del Header
   async handleSave() {
     if (this.isSubmitting) return;
 
+    // 1. Validar Título Principal
+    const titleInput = document.getElementById("documentTitleInput");
+    const explicitTitle = titleInput.value.trim();
+    if (!explicitTitle) {
+      alert(
+        "Por favor, asigna un nombre o identificación al registro en el encabezado."
+      );
+      titleInput.focus();
+      titleInput.classList.add("ring-2", "ring-red-500", "bg-red-50");
+      setTimeout(
+        () =>
+          titleInput.classList.remove("ring-2", "ring-red-500", "bg-red-50"),
+        2000
+      );
+      return;
+    }
+
+    // 2. Validar Formulario Dinámico
     const form = document.querySelector(`form[id^="templateForm_"]`);
-    if (form && !form.checkValidity()) {
-      form.reportValidity();
+    // Nota: como ya no usamos form tag en render, validamos inputs manualmente si tienen 'required'
+    // Opcional: Implementar validación manual simple
+    const requiredInputs = document.querySelectorAll("[required]");
+    let isValid = true;
+    requiredInputs.forEach((input) => {
+      if (!input.value && input.id !== "documentTitleInput") {
+        isValid = false;
+        input.classList.add("border-red-500");
+      }
+    });
+    if (!isValid) {
+      alert("Por favor completa los campos requeridos marcados.");
       return;
     }
 
@@ -464,23 +437,29 @@ export class DocumentEditor {
     );
 
     try {
-      // Forzar evaluación de mates pendientes
       document
         .querySelectorAll(".math-input")
         .forEach((inp) => this.evaluateMathInput(inp));
-      await new Promise((r) => setTimeout(r, 100)); // Breve pausa para UI
+      await new Promise((r) => setTimeout(r, 100));
 
       const formData = this.collectFormData();
       let result;
 
       if (this.isEditing) {
+        // Pasamos explicitTitle como 4to argumento (necesitaremos actualizar el servicio)
+        // O mejor: pasamos un objeto de opciones
         result = await documentService.updateDocument(
           this.documentId,
           this.template,
-          formData
+          formData,
+          explicitTitle // <--- NUEVO
         );
       } else {
-        result = await documentService.createDocument(this.template, formData);
+        result = await documentService.createDocument(
+          this.template,
+          formData,
+          explicitTitle // <--- NUEVO
+        );
       }
 
       if (this.onSaveSuccess) this.onSaveSuccess(result);
@@ -494,7 +473,8 @@ export class DocumentEditor {
   collectFormData() {
     const formData = {};
     this.template.fields.forEach((field) => {
-      // Manejo especial URL plano (fuera de tabla)
+      if (field.type === "separator") return; // Ignorar separadores
+
       if (field.type === "url") {
         const u = document.getElementById(`${field.id}_url`);
         const t = document.getElementById(`${field.id}_text`);

@@ -114,3 +114,22 @@ export const getFieldTypeLabel = (type) => {
   const metadata = getFieldTypeMetadata(type);
   return metadata ? metadata.label : type;
 };
+
+// src/utils/helpers.js
+
+// ... (resto del archivo igual) ...
+
+export const detectMediaType = (url) => {
+  if (!url || typeof url !== "string") return "link";
+
+  // Limpiamos query params para detectar extensión limpia
+  let cleanUrl = url.split("?")[0].toLowerCase();
+
+  const imageExts = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp"];
+  const audioExts = [".mp3", ".wav", ".ogg", ".m4a", ".aac"];
+
+  if (imageExts.some((ext) => cleanUrl.endsWith(ext))) return "image";
+  if (audioExts.some((ext) => cleanUrl.endsWith(ext))) return "audio";
+
+  return "link";
+};
