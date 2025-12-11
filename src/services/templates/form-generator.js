@@ -18,7 +18,7 @@ class TemplateFormGenerator {
     let inputType = metadata?.inputType || "text";
     let inputHtml = "";
 
-    // --- SEPARADOR (NUEVO) ---
+    // --- SEPARADOR ---
     if (inputType === "separator") {
       return `
             <div class="col-span-1 md:col-span-2 mt-6 mb-2 group animate-fade-in">
@@ -98,7 +98,7 @@ class TemplateFormGenerator {
           <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400"><i class="fas fa-chevron-down text-xs"></i></div>
         </div>`;
     }
-    // 5. Tabla
+    // 5. Tabla (AQUÍ ESTÁ LA CORRECCIÓN CRÍTICA)
     else if (inputType === "table") {
       const headers = (field.columns || [])
         .map(
@@ -106,14 +106,21 @@ class TemplateFormGenerator {
             `<th class="px-4 py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 border-b border-slate-100 first:rounded-tl-lg">${c.label}</th>`
         )
         .join("");
+
       const rowsData = Array.isArray(currentValue) ? currentValue : [];
+
+      // FIX: Escapamos las comillas dobles para que el JSON no rompa el atributo HTML value="..."
+      // Esto convierte {"a":"b"} en {&quot;a&quot;:&quot;b&quot;}
+      const safeJson = JSON.stringify(rowsData).replace(/"/g, "&quot;");
+
       inputHtml = `
         <div class="table-input-container w-full overflow-hidden border border-slate-200 rounded-2xl bg-white shadow-sm ring-1 ring-slate-100/50" data-field-id="${
           field.id
         }">
           <input type="hidden" id="${field.id}" name="${
         field.id
-      }" value='${JSON.stringify(rowsData)}' class="form-table-data">
+      }" value="${safeJson}" class="form-table-data">
+          
           <div class="overflow-x-auto custom-scrollbar">
             <table class="min-w-full divide-y divide-slate-100">
               <thead><tr>${headers}<th class="w-12 bg-slate-50 border-b border-slate-100 rounded-tr-lg"></th></tr></thead>

@@ -1,5 +1,5 @@
 // src/components/TemplateList.js
-import { getCategoryName, getCategoryIcon } from "../utils/helpers.js";
+import { getCategoryName, getCategoryIcon } from "../../utils/helpers.js";
 
 export class TemplateList {
   constructor(handlers) {

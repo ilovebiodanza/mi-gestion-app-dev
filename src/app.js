@@ -3,12 +3,14 @@ import { authService } from "./services/auth.js";
 import { AuthForms } from "./components/AuthForms.js";
 import { PasswordPrompt } from "./components/PasswordPrompt.js";
 import { encryptionService } from "./services/encryption/index.js";
-import { TemplateManager } from "./components/TemplateManager.js";
+import { TemplateManager } from "./components/templates/TemplateManager.js";
 import { templateService } from "./services/templates/index.js";
 import { DocumentEditor } from "./components/editor/DocumentEditor.js";
 import { VaultList } from "./components/VaultList.js";
 import { DocumentViewer } from "./components/viewer/DocumentViewer.js";
 import { SettingsManager } from "./components/SettingsManager.js";
+import { toast } from "./utils/Toast.js";
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 
 console.log("🚀 Mi Gestión - Sistema Iniciado (Tema Colorido)");
 

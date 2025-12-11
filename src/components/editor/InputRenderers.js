@@ -1,6 +1,48 @@
 // src/components/editor/InputRenderers.js
 
 /**
+ * Genera una VISTA PREVIA de texto simple para la fila del editor.
+ * (Ya no es un input, solo texto para leer).
+ */
+export function renderCellPreview(col, val) {
+  if (val === undefined || val === null || val === "")
+    return '<span class="text-slate-300 italic text-xs">--</span>';
+
+  // 1. URL
+  if (col.type === "url") {
+    const urlVal = val?.url || (typeof val === "string" ? val : "") || "";
+    const textVal = val?.text || "";
+    const display = textVal || urlVal;
+    return `<div class="flex items-center gap-1.5 overflow-hidden">
+                  <i class="fas fa-link text-[10px] text-indigo-400 flex-shrink-0"></i>
+                  <span class="truncate text-xs text-slate-600 font-medium" title="${urlVal}">${display}</span>
+                </div>`;
+  }
+
+  // 2. BOOLEAN
+  if (col.type === "boolean") {
+    return val
+      ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700"><i class="fas fa-check mr-1"></i> Sí</span>'
+      : '<span class="text-slate-400 text-xs">No</span>';
+  }
+
+  // 3. SECRETO
+  if (col.type === "secret") {
+    return '<span class="text-slate-400 text-xs tracking-widest">••••••</span>';
+  }
+
+  // 4. MONEDA / NÚMERO
+  if (["currency", "percentage"].includes(col.type)) {
+    return `<span class="font-mono text-xs text-slate-700 font-bold">${val}${
+      col.type === "percentage" ? "%" : ""
+    }</span>`;
+  }
+
+  // 5. TEXTO / SELECT / DATE
+  return `<span class="text-xs text-slate-600 truncate block" title="${val}">${val}</span>`;
+}
+
+/**
  * Genera el HTML para un input de celda de tabla basado en su configuración.
  * @param {Object} col - La definición de la columna (campo).
  * @param {any} val - El valor actual.

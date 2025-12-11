@@ -3,7 +3,8 @@
 import { templateFormGenerator } from "../../services/templates/form-generator.js"; // Ajusta ruta si es necesario
 import { documentService } from "../../services/documents/index.js";
 import { encryptionService } from "../../services/encryption/index.js";
-import { renderCellInput } from "./InputRenderers.js"; // <--- NUEVO IMPORT
+import { renderCellPreview } from "./InputRenderers.js"; // <--- IMPORTAR PREVIEW
+import { tableRowModal } from "./TableRowModal.js"; // <--- IMPORTAR MODAL
 
 export class DocumentEditor {
   constructor(initialData, onSaveSuccess, onCancel) {
@@ -165,80 +166,133 @@ export class DocumentEditor {
     const containers = document.querySelectorAll(".table-input-container");
 
     containers.forEach((container) => {
-      // Estilos base del contenedor
       container.className =
         "table-input-container w-full overflow-hidden border border-slate-200 rounded-2xl bg-white shadow-sm ring-1 ring-slate-100";
 
       const fieldId = container.dataset.fieldId;
-      const hiddenInput = container.querySelector(`#${fieldId}`);
+      const hiddenInput = container.querySelector(`#${fieldId}`); // LA FUENTE DE LA VERDAD
       const tbody = container.querySelector(".table-body");
 
-      // Botón agregar fila
+      // 1. Obtener definición de columnas
+      let columnsDef = [];
+      try {
+        columnsDef = JSON.parse(container.nextElementSibling.textContent);
+      } catch (e) {}
+
+      // 2. Función Renderizado de Tabla (Solo Lectura + Botones)
+      const renderTableFromJSON = () => {
+        tbody.innerHTML = "";
+        let currentData = [];
+        try {
+          // Intentamos parsear. Si falla (por el error de comillas), usamos array vacío
+          // para que al menos la página cargue y te deje "reparar" la tabla manualmente.
+          currentData = JSON.parse(hiddenInput.value || "[]");
+        } catch (e) {
+          console.error(
+            "Error parseando datos de tabla (Recuperando modo seguro):",
+            e
+          );
+          currentData = []; // Fallback a vacío para no romper la app
+
+          // Opcional: Mostrar un aviso visual en la tabla
+          tbody.innerHTML = `<tr><td colspan="100%" class="p-4 text-red-500 bg-red-50 text-xs font-bold text-center">Error cargando datos de esta tabla. Se ha reiniciado por seguridad.</td></tr>`;
+          return;
+        }
+        if (currentData.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="${
+            columnsDef.length + 1
+          }" class="p-6 text-center text-xs text-slate-400 italic">No hay registros aún.</td></tr>`;
+          return;
+        }
+
+        currentData.forEach((row, index) => {
+          const tr = document.createElement("tr");
+          tr.className =
+            "border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors group";
+
+          let tds = "";
+          columnsDef.forEach((col) => {
+            // Usamos el renderCellPreview para mostrar texto bonito
+            tds += `<td class="px-4 py-3 align-top border-r border-slate-50 last:border-0">${renderCellPreview(
+              col,
+              row[col.id]
+            )}</td>`;
+          });
+
+          // Columna de Acciones
+          tds += `
+             <td class="w-24 text-center p-0 align-middle whitespace-nowrap">
+                 <div class="flex items-center justify-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                     <button type="button" class="edit-row-btn w-8 h-8 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" data-index="${index}" title="Editar">
+                        <i class="fas fa-pencil-alt text-xs"></i>
+                     </button>
+                     <button type="button" class="remove-row-btn w-8 h-8 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" data-index="${index}" title="Eliminar">
+                        <i class="fas fa-trash-alt text-xs"></i>
+                     </button>
+                 </div>
+             </td>`;
+
+          tr.innerHTML = tds;
+          tbody.appendChild(tr);
+        });
+      };
+
+      // 3. Render Inicial
+      renderTableFromJSON();
+
+      // 4. Botón Agregar (Abre Modal Vacío)
       const addBtn = container.querySelector(".add-row-btn");
       if (addBtn) {
         addBtn.className =
           "add-row-btn w-full py-3 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 font-bold text-xs uppercase tracking-wider transition-colors border-t border-slate-100 flex items-center justify-center gap-2 group";
         addBtn.innerHTML =
           '<i class="fas fa-plus-circle group-hover:scale-110 transition-transform"></i> Agregar Registro';
+
+        // --- CLICK AGREGAR ---
+        addBtn.addEventListener("click", () => {
+          tableRowModal.open(columnsDef, {}, null, (newRowData) => {
+            // Guardar Nuevo
+            const currentData = JSON.parse(hiddenInput.value || "[]");
+            currentData.push(newRowData);
+            hiddenInput.value = JSON.stringify(currentData);
+            renderTableFromJSON(); // Repintar
+          });
+        });
       }
 
-      // Estilos Headers
-      const thead = container.querySelector("thead");
-      if (thead)
-        thead.className =
-          "bg-slate-50/80 text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100";
-      container
-        .querySelectorAll("th")
-        .forEach((th) => (th.className = "px-4 py-3 text-left tracking-wide"));
-
-      // Obtener definición de columnas
-      let columnsDef = [];
-      try {
-        columnsDef = JSON.parse(container.nextElementSibling.textContent);
-      } catch (e) {}
-
-      // Función para pintar una fila usando InputRenderers
-      const renderRow = (rowData = {}) => {
-        const tr = document.createElement("tr");
-        tr.className =
-          "group border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors";
-
-        let tds = "";
-        columnsDef.forEach((col) => {
-          // --- AQUÍ USAMOS EL NUEVO RENDERIZADOR ---
-          tds += `<td class="p-1 border-r border-slate-50 last:border-0 align-top">${renderCellInput(
-            col,
-            rowData[col.id]
-          )}</td>`;
-        });
-
-        tds += `<td class="w-10 text-center p-0 align-middle"><button type="button" class="remove-row-btn w-8 h-8 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all mx-auto flex items-center justify-center opacity-0 group-hover:opacity-100"><i class="fas fa-times"></i></button></td>`;
-
-        tr.innerHTML = tds;
-        tbody.appendChild(tr);
-        this.attachRowListeners(tr);
-      };
-
-      // Cargar datos iniciales
-      const initialData = JSON.parse(hiddenInput.value || "[]");
-      initialData.forEach((row) => renderRow(row));
-
-      // Listeners de Tabla
-      addBtn.addEventListener("click", () => renderRow({}));
-
+      // 5. Delegación de Eventos (Editar / Eliminar)
       tbody.addEventListener("click", (e) => {
-        if (e.target.closest(".remove-row-btn")) {
-          e.target.closest("tr").remove();
-          this.updateHiddenTableInput(tbody, columnsDef, hiddenInput);
+        // --- CLICK ELIMINAR ---
+        const delBtn = e.target.closest(".remove-row-btn");
+        if (delBtn) {
+          const index = parseInt(delBtn.dataset.index);
+          const currentData = JSON.parse(hiddenInput.value || "[]");
+          currentData.splice(index, 1); // Borrar
+          hiddenInput.value = JSON.stringify(currentData);
+          renderTableFromJSON(); // Repintar
+        }
+
+        // --- CLICK EDITAR ---
+        const editBtn = e.target.closest(".edit-row-btn");
+        if (editBtn) {
+          const index = parseInt(editBtn.dataset.index);
+          const currentData = JSON.parse(hiddenInput.value || "[]");
+          const rowData = currentData[index];
+
+          tableRowModal.open(
+            columnsDef,
+            rowData,
+            index,
+            (updatedRowData, idx) => {
+              // Guardar Edición
+              const dataNow = JSON.parse(hiddenInput.value || "[]");
+              dataNow[idx] = updatedRowData;
+              hiddenInput.value = JSON.stringify(dataNow);
+              renderTableFromJSON(); // Repintar
+            }
+          );
         }
       });
-
-      tbody.addEventListener("input", () =>
-        this.updateHiddenTableInput(tbody, columnsDef, hiddenInput)
-      );
-      tbody.addEventListener("change", () =>
-        this.updateHiddenTableInput(tbody, columnsDef, hiddenInput)
-      );
     });
   }
 

@@ -1,9 +1,12 @@
 import { authService } from "../services/auth.js";
+// Ya no necesitamos importar getAuthErrorMessage aquí porque el Toast lo maneja
 
 export class AuthForms {
-  constructor(onLoginSuccess) {
+  // Modificamos el constructor para aceptar el callback de error
+  constructor(onLoginSuccess, onError) {
     this.onLoginSuccess = onLoginSuccess;
-    this.isLoginMode = true; // Estado para alternar vistas
+    this.onError = onError; // Callback para manejar errores (Toast)
+    this.isLoginMode = true;
   }
 
   updateView(container) {
@@ -62,11 +65,6 @@ export class AuthForms {
           </div>
         </div>
 
-        <div id="errorMessage" class="hidden flex items-start gap-3 p-3 rounded-lg bg-red-50 text-red-600 text-sm border border-red-100">
-           <i class="fas fa-exclamation-circle mt-0.5"></i>
-           <span id="errorText">Error</span>
-        </div>
-
         <button type="submit" 
           class="w-full py-3.5 px-4 bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary-hover text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all active:scale-[0.98] flex justify-center items-center gap-2">
           <span>${
@@ -89,15 +87,13 @@ export class AuthForms {
 
   setupEventListeners(container) {
     const form = container.querySelector("#authForm");
-    const errorMsg = container.querySelector("#errorMessage");
-    const errorText = container.querySelector("#errorText");
     const tabLogin = container.querySelector("#tabLogin");
     const tabRegister = container.querySelector("#tabRegister");
 
     // Lógica de Tabs
     const switchMode = (isLogin) => {
       this.isLoginMode = isLogin;
-      this.updateView(container); // Re-render completo para actualizar UI
+      this.updateView(container);
     };
 
     tabLogin?.addEventListener("click", () => switchMode(true));
@@ -114,7 +110,6 @@ export class AuthForms {
       const originalContent = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> Procesando...`;
-      errorMsg.classList.add("hidden");
 
       try {
         if (this.isLoginMode) {
@@ -124,49 +119,47 @@ export class AuthForms {
         }
         this.onLoginSuccess();
       } catch (error) {
-        errorText.textContent = this.mapFirebaseError(error.code);
-        errorMsg.classList.remove("hidden");
-        // Animación de "shake" para el error
-        errorMsg.classList.add("animate-pulse");
+        // Restaurar botón
         btn.disabled = false;
         btn.innerHTML = originalContent;
+
+        // DELEGACIÓN DE ERROR:
+        // Si existe el callback onError, lo ejecutamos pasando el objeto error completo.
+        // app.js se encargará de mostrar el Toast y manejar la lógica de "User Not Found".
+        if (this.onError) {
+          this.onError(error);
+        } else {
+          // Fallback simple por seguridad
+          console.error("Auth Error:", error);
+          alert(error.message);
+        }
       }
     });
 
+    // Recuperación de contraseña (Mantenemos la lógica de alert simple o podrías usar Toast también)
     container
       .querySelector("#forgotPassword")
       ?.addEventListener("click", (e) => {
         e.preventDefault();
         const email = container.querySelector("#email").value;
         if (!email) {
-          errorText.textContent =
-            "Ingresa tu correo arriba para recuperar la contraseña.";
-          errorMsg.classList.remove("hidden");
+          // Aquí también podemos usar el onError si lo deseamos, creando un error falso
+          if (this.onError)
+            this.onError({
+              code: "auth/missing-email",
+              message: "Falta email",
+            });
           return;
         }
         authService
           .resetPassword(email)
-          .then(() => alert("Se ha enviado un correo de recuperación."))
-          .catch((err) => alert(err.message));
+          .then(() => {
+            // Podríamos pasar un success callback, pero por ahora un alert nativo o toast
+            alert("Se ha enviado un correo de recuperación.");
+          })
+          .catch((err) => {
+            if (this.onError) this.onError(err);
+          });
       });
-  }
-
-  mapFirebaseError(code) {
-    switch (code) {
-      case "auth/invalid-email":
-        return "El correo electrónico no es válido.";
-      case "auth/user-disabled":
-        return "Este usuario ha sido deshabilitado.";
-      case "auth/user-not-found":
-        return "No existe una cuenta con este correo.";
-      case "auth/wrong-password":
-        return "Contraseña incorrecta.";
-      case "auth/email-already-in-use":
-        return "El correo ya está registrado.";
-      case "auth/weak-password":
-        return "La contraseña debe tener al menos 6 caracteres.";
-      default:
-        return "Ocurrió un error inesperado. Intenta nuevamente.";
-    }
   }
 }

@@ -1,5 +1,6 @@
 // src/services/auth.js
 import { encryptionService } from "./encryption/index.js";
+import { getAuthErrorMessage } from "../utils/auth-errors.js"; // <--- IMPORTAR
 
 class AuthService {
   constructor() {
@@ -46,8 +47,6 @@ class AuthService {
    * Método centralizado para actualizar estado y avisar a la app
    */
   updateState(user) {
-    // Evitar notificaciones duplicadas si el usuario es el mismo
-    // (Opcional, pero útil para evitar parpadeos)
     this.user = user;
     this.notifyObservers(user);
   }
@@ -56,17 +55,12 @@ class AuthService {
     this.observers.push(observer);
     // Si ya sabemos quién es el usuario, avisar al nuevo suscriptor de inmediato
     if (this.user !== null) {
-      console.log(
-        "🔍 AuthService: Suscriptor registrado, notificando estado actual inmediato."
-      );
       observer(this.user);
     }
   }
 
   notifyObservers(user) {
-    console.log(
-      `🔍 AuthService: Notificando a ${this.observers.length} observadores.`
-    );
+    // console.log(`🔍 AuthService: Notificando a ${this.observers.length} observadores.`);
     this.observers.forEach((obs) => obs(user));
   }
 
@@ -77,8 +71,7 @@ class AuthService {
   // --- AUTENTICACIÓN ---
 
   async login(email, password) {
-    if (!this.auth)
-      return { success: false, error: "Servicio no inicializado" };
+    if (!this.auth) throw new Error("Servicio no inicializado");
 
     try {
       console.log("🔍 AuthService: Intentando login...");
@@ -92,20 +85,19 @@ class AuthService {
       );
       console.log("🔍 AuthService: Login exitoso en nube.");
 
-      // 2. ACTUALIZACIÓN MANUAL (REDUNDANCIA)
-      // No esperamos a onAuthStateChanged, actualizamos ya.
+      // 2. ACTUALIZACIÓN MANUAL (Opcional, pero segura)
       this.updateState(userCredential.user);
 
       return { success: true, user: userCredential.user };
     } catch (error) {
-      console.error("Error Login:", error);
-      return { success: false, error: this.mapAuthError(error.code) };
+      console.error("Error Registro:", error);
+      // Si decides devolver objeto en lugar de throw, usas el mapper compartido:
+      return { success: false, error: getAuthErrorMessage(error.code) };
     }
   }
 
   async register(email, password) {
-    if (!this.auth)
-      return { success: false, error: "Servicio no inicializado" };
+    if (!this.auth) throw new Error("Servicio no inicializado");
     try {
       const { createUserWithEmailAndPassword } = window.firebaseModules;
       const userCredential = await createUserWithEmailAndPassword(
@@ -122,7 +114,12 @@ class AuthService {
 
       return { success: true, user: userCredential.user };
     } catch (error) {
-      return { success: false, error: this.mapAuthError(error.code) };
+      // Nota: En registro sí solemos devolver objeto success/error porque
+      // a veces queremos manejarlo distinto, pero si tu UI espera throw,
+      // deberías usar throw error aquí también.
+      // Por ahora mantengo tu estructura original para registro si te funciona bien.
+      console.error("Error Registro:", error);
+      throw error; // Recomendado unificar comportamiento con Login
     }
   }
 
@@ -142,19 +139,19 @@ class AuthService {
 
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error(error);
+      throw error;
     }
   }
 
   async resetPassword(email) {
-    if (!this.auth)
-      return { success: false, error: "Servicio no inicializado" };
+    if (!this.auth) throw new Error("Servicio no inicializado");
     try {
       const { sendPasswordResetEmail } = window.firebaseModules;
       await sendPasswordResetEmail(this.auth, email);
       return { success: true, message: "Correo enviado" };
     } catch (error) {
-      return { success: false, error: this.mapAuthError(error.code) };
+      throw error;
     }
   }
 
@@ -175,7 +172,7 @@ class AuthService {
       await updatePassword(user, newPassword);
       return { success: true };
     } catch (error) {
-      return { success: false, error: this.mapAuthError(error.code) };
+      throw error;
     }
   }
 
@@ -187,29 +184,6 @@ class AuthService {
     if (!user) throw new Error("Usuario no autenticado (AuthService)");
 
     return await encryptionService.initialize(password, user.uid);
-  }
-
-  mapAuthError(code) {
-    switch (code) {
-      case "auth/invalid-email":
-        return "Correo inválido";
-      case "auth/user-disabled":
-        return "Usuario bloqueado";
-      case "auth/user-not-found":
-        return "Usuario no encontrado";
-      case "auth/wrong-password":
-        return "Contraseña incorrecta";
-      case "auth/email-already-in-use":
-        return "Email ya registrado";
-      case "auth/weak-password":
-        return "Contraseña muy débil";
-      case "auth/too-many-requests":
-        return "Muchos intentos. Espera un poco.";
-      case "auth/network-request-failed":
-        return "Error de red. Verifica conexión.";
-      default:
-        return "Error: " + code;
-    }
   }
 }
 

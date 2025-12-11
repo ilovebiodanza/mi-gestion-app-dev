@@ -1,33 +1,28 @@
-// src/components/TemplateForm.js
-import { generateFieldId, getCategoryIcon } from "../utils/helpers.js";
-import { getFieldTypesConfig } from "../utils/field-types-config.js";
+// src/components/templates/TemplateFormRenderers.js
+import { generateFieldId } from "../../utils/helpers.js";
+import { getFieldTypesConfig } from "../../utils/field-types-config.js";
 
-export class TemplateForm {
-  constructor(handlers) {
-    this.handlers = handlers;
-    this.activeFieldItem = null;
-    this.mainSortable = null;
-    this.modalSortable = null;
-  }
+/**
+ * Renderiza la estructura principal del formulario de plantilla.
+ */
+export function renderMainLayout(isEditing, initialData) {
+  const categoryOptions = [
+    { value: "custom", label: "Personalizado" },
+    { value: "personal", label: "Personal" },
+    { value: "access", label: "Accesos" },
+    { value: "financial", label: "Financiero" },
+    { value: "health", label: "Salud" },
+    { value: "home", label: "Hogar" },
+    { value: "car", label: "Vehículo" },
+    { value: "job", label: "Trabajo" },
+    { value: "education", label: "Formación" },
+  ];
 
-  render(template = null) {
-    const isEditing = !!template;
-    const categoryOptions = [
-      { value: "custom", label: "Personalizado" },
-      { value: "personal", label: "Personal" },
-      { value: "access", label: "Accesos" },
-      { value: "financial", label: "Financiero" },
-      { value: "health", label: "Salud" },
-      { value: "home", label: "Hogar" },
-      { value: "car", label: "Vehículo" },
-      { value: "job", label: "Trabajo" },
-      { value: "education", label: "Formación" },
-    ];
-    const currentCategory = template?.settings?.category || "custom";
-    const initialIcon = template?.icon || "📋";
-    const initialColor = template?.color || "#4F46E5";
+  const currentCategory = initialData?.settings?.category || "custom";
+  const initialIcon = initialData?.icon || "📋";
+  const initialColor = initialData?.color || "#4F46E5";
 
-    return `
+  return `
       <div class="max-w-4xl mx-auto animate-fade-in-up pb-24">
           <div class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 py-4 px-1 shadow-sm mb-8 -mx-4 sm:mx-0 sm:rounded-b-2xl transition-all">
             <div class="flex flex-col sm:flex-row justify-between items-center gap-4 max-w-4xl mx-auto">
@@ -70,7 +65,7 @@ export class TemplateForm {
                       <div class="md:col-span-8">
                           <label class="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Nombre</label>
                           <input type="text" id="templateName" value="${
-                            template?.name || ""
+                            initialData?.name || ""
                           }" 
                                  class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition text-slate-800 font-bold placeholder-slate-400 text-lg" 
                                  required placeholder="Ej: Tarjeta de Crédito">
@@ -113,7 +108,7 @@ export class TemplateForm {
                       <div class="md:col-span-12">
                           <label class="block text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Descripción (Opcional)</label>
                           <input type="text" id="templateDescription" value="${
-                            template?.description || ""
+                            initialData?.description || ""
                           }" 
                                  class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition text-slate-600" 
                                  placeholder="Describe brevemente el propósito de este documento...">
@@ -137,14 +132,9 @@ export class TemplateForm {
                   </div>
 
                   <div id="fieldsContainer" class="space-y-4">
-                      ${(template?.fields || [])
-                        .map((f, i) => this.renderFieldItem(f, i))
-                        .join("")}
-                  </div>
+                      </div>
                   
-                  <div id="noFieldsMessage" class="${
-                    template?.fields?.length ? "hidden" : ""
-                  } flex flex-col items-center justify-center py-16 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/30 mt-4 transition-all hover:bg-slate-50 hover:border-indigo-200 group cursor-pointer" onclick="document.getElementById('addFieldBtn').click()">
+                  <div id="noFieldsMessage" class="hidden flex flex-col items-center justify-center py-16 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/30 mt-4 transition-all hover:bg-slate-50 hover:border-indigo-200 group cursor-pointer" onclick="document.getElementById('addFieldBtn').click()">
                       <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100 group-hover:scale-110 transition-transform duration-300">
                           <i class="fas fa-plus text-3xl text-slate-300 group-hover:text-indigo-400"></i>
                       </div>
@@ -154,28 +144,31 @@ export class TemplateForm {
               </div>
           </form>
       </div>
-
-      ${this.renderColumnsModal()} 
+      
+      ${renderColumnsModalHTML()}
     `;
-  }
+}
 
-  renderFieldItem(field = null, index = 0) {
-    const fieldId =
-      field?.id || generateFieldId(field?.label || `campo_${index + 1}`, index);
-    const fieldTypes = getFieldTypesConfig();
+/**
+ * Renderiza un item de campo individual (la tarjeta arrastrable).
+ */
+export function renderFieldItemConfig(field = null, index = 0) {
+  const fieldId =
+    field?.id || generateFieldId(field?.label || `campo_${index + 1}`, index);
+  const fieldTypes = getFieldTypesConfig();
+  const isSeparator = field?.type === "separator";
 
-    // Lógica para Separador
-    const isSeparator = field?.type === "separator";
-    const cardBg = isSeparator
-      ? "bg-slate-50 border-slate-300 shadow-inner"
-      : "bg-white border-slate-200 hover:shadow-lg hover:border-primary/50";
+  // Estilos condicionales
+  const cardBg = isSeparator
+    ? "bg-slate-50 border-slate-300 shadow-inner"
+    : "bg-white border-slate-200 hover:shadow-lg hover:border-primary/50";
 
-    const columnsCount =
-      field?.type === "table" && field.columns ? field.columns.length : 0;
-    const columnsData =
-      field?.type === "table" ? JSON.stringify(field.columns) : "[]";
+  const columnsCount =
+    field?.type === "table" && field.columns ? field.columns.length : 0;
+  const columnsData =
+    field?.type === "table" ? JSON.stringify(field.columns) : "[]";
 
-    return `
+  return `
     <div class="field-item group relative ${cardBg} border rounded-2xl p-1 transition-all duration-300 hover:z-10" data-field-id="${fieldId}">
       <div class="flex items-stretch">
         <div class="w-10 flex flex-col items-center justify-center text-slate-300 cursor-grab active:cursor-grabbing hover:text-indigo-500 drag-handle rounded-l-xl border-r border-slate-200/50 transition-colors">
@@ -193,9 +186,10 @@ export class TemplateForm {
                         }
                     </label>
                     <input type="text" class="field-label w-full px-3 py-2 bg-white/60 border border-slate-200 rounded-lg focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition font-semibold text-slate-700 text-sm" 
-                           value="${field?.label || ""}" placeholder="${
-      isSeparator ? "Ej: Datos Bancarios" : "Ej: Usuario"
-    }" required />
+                           value="${field?.label || ""}" 
+                           placeholder="${
+                             isSeparator ? "Ej: Datos Bancarios" : "Ej: Usuario"
+                           }" required />
                 </div>
                 
                 <div class="md:col-span-5">
@@ -217,6 +211,7 @@ export class TemplateForm {
             </div>
 
             <div class="space-y-3 ${isSeparator ? "hidden" : ""}">
+                
                 <div class="options-input-group ${
                   field?.type === "select" ? "animate-fade-in" : "hidden"
                 }">
@@ -269,10 +264,13 @@ export class TemplateForm {
         </button>
       </div>
     </div>`;
-  }
+}
 
-  renderColumnsModal() {
-    return `
+/**
+ * Renderiza el modal de configuración de columnas.
+ */
+export function renderColumnsModalHTML() {
+  return `
       <div id="columnsModal" class="fixed inset-0 z-[60] hidden">
         <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-fade-in" id="closeModalBackdrop"></div>
         <div class="relative w-full h-full flex items-center justify-center p-4">
@@ -293,11 +291,13 @@ export class TemplateForm {
                 
                 <div class="p-8 overflow-y-auto flex-grow bg-slate-50/50 custom-scrollbar">
                     <div id="modalColumnsContainer" class="space-y-3"></div>
+                    
                     <div id="noColumnsMessage" class="flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-300 rounded-2xl bg-white mt-2">
                          <div class="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-2"><i class="fas fa-columns"></i></div>
                         <p class="text-slate-500 font-medium text-sm">No hay columnas definidas</p>
                         <button type="button" id="addColBtnEmpty" class="text-indigo-600 text-sm font-bold hover:underline mt-1">Agregar la primera</button>
                     </div>
+
                     <button type="button" id="addColBtn" class="mt-6 w-full py-3.5 border-2 border-dashed border-indigo-200 bg-indigo-50/40 text-indigo-600 rounded-xl hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-sm transition flex items-center justify-center font-bold text-sm gap-2">
                         <i class="fas fa-plus-circle"></i> Agregar Nueva Columna
                     </button>
@@ -312,258 +312,4 @@ export class TemplateForm {
             </div>
         </div>
       </div>`;
-  }
-
-  setupListeners(container) {
-    const catSelect = container.querySelector("#templateCategory");
-    const iconInput = container.querySelector("#templateIcon");
-    if (catSelect && iconInput) {
-      catSelect.addEventListener(
-        "change",
-        (e) => (iconInput.value = getCategoryIcon(e.target.value))
-      );
-    }
-
-    container
-      .querySelector("#addFieldBtn")
-      ?.addEventListener("click", () => this.addField(container));
-
-    this.initSortable(container.querySelector("#fieldsContainer"), "main");
-
-    const fieldsContainer = container.querySelector("#fieldsContainer");
-    if (fieldsContainer) {
-      // 1. Clicks (Borrar, Configurar tabla)
-      fieldsContainer.addEventListener("click", (e) => {
-        if (e.target.closest(".remove-field")) {
-          e.target.closest(".field-item").remove();
-          this.updateNoFieldsMessage(container);
-        }
-        if (e.target.closest(".configure-table-btn")) {
-          this.openColumnsModal(e.target.closest(".field-item"));
-        }
-      });
-
-      // 2. Cambios (Selector de tipo)
-      fieldsContainer.addEventListener("change", (e) => {
-        if (e.target.classList.contains("field-type")) {
-          const item = e.target.closest(".field-item");
-          const currentLabel = item.querySelector(".field-label").value;
-          const currentId = item.dataset.fieldId;
-          const newType = e.target.value;
-
-          const tempField = {
-            id: currentId,
-            label: currentLabel,
-            type: newType,
-            options: [],
-            columns: [],
-            required: false,
-          };
-
-          item.outerHTML = this.renderFieldItem(tempField);
-        }
-      });
-    }
-
-    container
-      .querySelector("#templateForm")
-      ?.addEventListener("submit", (e) => {
-        e.preventDefault();
-        this.saveData();
-      });
-    container
-      .querySelector("#cancelTemplate")
-      ?.addEventListener("click", () => this.handlers.onCancel());
-
-    this.setupModalListeners();
-  }
-
-  initSortable(element, type) {
-    if (!element || !window.Sortable) return;
-    if (type === "main" && this.mainSortable) this.mainSortable.destroy();
-    if (type === "modal" && this.modalSortable) this.modalSortable.destroy();
-
-    const config = {
-      animation: 200,
-      handle: ".drag-handle",
-      ghostClass: "sortable-ghost",
-      dragClass: "sortable-drag",
-      forceFallback: true,
-      onEnd: () => {},
-    };
-
-    const sortable = new window.Sortable(element, config);
-
-    if (type === "main") this.mainSortable = sortable;
-    else this.modalSortable = sortable;
-  }
-
-  addField(container) {
-    const fc = container.querySelector("#fieldsContainer");
-    const count = fc.querySelectorAll(".field-item").length;
-    fc.insertAdjacentHTML("beforeend", this.renderFieldItem(null, count));
-    this.updateNoFieldsMessage(container);
-  }
-
-  updateNoFieldsMessage(container) {
-    const fc = container.querySelector("#fieldsContainer");
-    const msg = container.querySelector("#noFieldsMessage");
-    if (fc && msg) msg.classList.toggle("hidden", fc.children.length > 0);
-  }
-
-  setupModalListeners() {
-    const modal = document.getElementById("columnsModal");
-    if (!modal) return;
-
-    const close = () => {
-      modal.classList.add("hidden");
-    };
-    modal.querySelector("#closeModalTop").onclick = close;
-    modal.querySelector("#cancelModalBtn").onclick = close;
-    modal.querySelector("#closeModalBackdrop").onclick = close;
-
-    const addFn = () => {
-      const c = modal.querySelector("#modalColumnsContainer");
-      const count = c.querySelectorAll(".field-item").length;
-      c.insertAdjacentHTML("beforeend", this.renderFieldItem(null, count));
-      const newItem = c.lastElementChild;
-
-      const select = newItem.querySelector(".field-type");
-      [...select.options].forEach((opt) => {
-        if (opt.value === "table" || opt.value === "separator") opt.remove(); // No separadores en tablas
-      });
-      newItem.classList.remove("p-1");
-      newItem.classList.add("p-0", "border-slate-200");
-      modal.querySelector("#noColumnsMessage").classList.add("hidden");
-    };
-
-    modal.querySelector("#addColBtn").onclick = addFn;
-    const emptyBtn = modal.querySelector("#addColBtnEmpty");
-    if (emptyBtn) emptyBtn.onclick = addFn;
-
-    const mc = modal.querySelector("#modalColumnsContainer");
-    mc.onclick = (e) => {
-      const rm = e.target.closest(".remove-field");
-      if (rm) {
-        rm.closest(".field-item").remove();
-        if (mc.children.length === 0)
-          modal.querySelector("#noColumnsMessage").classList.remove("hidden");
-      }
-    };
-
-    mc.onchange = (e) => {
-      if (e.target.classList.contains("field-type")) {
-        const item = e.target.closest(".field-item");
-        item
-          .querySelector(".options-input-group")
-          .classList.toggle("hidden", e.target.value !== "select");
-      }
-    };
-
-    modal.querySelector("#saveModalBtn").onclick = () => {
-      const columns = this.collectFields(mc);
-      const parent = this.activeFieldItem;
-      parent.querySelector(".field-columns-data").value =
-        JSON.stringify(columns);
-      parent.querySelector(".columns-count-badge").textContent = columns.length;
-      close();
-    };
-  }
-
-  openColumnsModal(fieldItem) {
-    this.activeFieldItem = fieldItem;
-    const modal = document.getElementById("columnsModal");
-    const container = document.getElementById("modalColumnsContainer");
-    const hiddenInput = fieldItem.querySelector(".field-columns-data");
-
-    let cols = [];
-    try {
-      cols = JSON.parse(hiddenInput.value || "[]");
-    } catch (e) {}
-
-    container.innerHTML = "";
-    cols.forEach((col, i) => {
-      container.insertAdjacentHTML("beforeend", this.renderFieldItem(col, i));
-      const el = container.lastElementChild;
-      el.classList.remove("p-1");
-      el.classList.add("p-0");
-
-      const select = el.querySelector(".field-type");
-      [...select.options].forEach((opt) => {
-        if (opt.value === "table" || opt.value === "separator") opt.remove();
-      });
-
-      if (col.type === "select")
-        el.querySelector(".options-input-group").classList.remove("hidden");
-    });
-
-    this.initSortable(container, "modal");
-    modal
-      .querySelector("#noColumnsMessage")
-      .classList.toggle("hidden", cols.length > 0);
-    modal.classList.remove("hidden");
-  }
-
-  collectFields(container) {
-    const fields = [];
-    container.querySelectorAll(".field-item").forEach((item, index) => {
-      const label = item.querySelector(".field-label").value.trim();
-      if (!label) return;
-
-      const type = item.querySelector(".field-type").value;
-      const fieldId = item.dataset.fieldId || generateFieldId(label, index);
-
-      let options = [];
-      if (type === "select") {
-        const txt = item.querySelector(".field-options").value;
-        if (txt)
-          options = txt
-            .split(",")
-            .map((s) => s.trim())
-            .filter((s) => s);
-      }
-
-      let columns = [];
-      if (type === "table") {
-        try {
-          columns = JSON.parse(item.querySelector(".field-columns-data").value);
-        } catch (e) {}
-      }
-
-      fields.push({
-        id: fieldId,
-        label,
-        type,
-        order: index + 1,
-        required: item.querySelector(".field-required").checked,
-        ...(options.length && { options }),
-        ...(columns.length && { columns }),
-      });
-    });
-    return fields;
-  }
-
-  saveData() {
-    try {
-      const name = document.getElementById("templateName").value.trim();
-      if (!name) throw new Error("Por favor, asigna un nombre a la plantilla.");
-      const fields = this.collectFields(
-        document.getElementById("fieldsContainer")
-      );
-      if (fields.length === 0)
-        throw new Error("Agrega al menos un campo para guardar la plantilla.");
-
-      const data = {
-        name,
-        category: document.getElementById("templateCategory").value,
-        icon: document.getElementById("templateIcon").value,
-        color: document.getElementById("templateColor").value,
-        description: document.getElementById("templateDescription").value,
-        fields,
-      };
-      this.handlers.onSave(data);
-    } catch (e) {
-      alert(e.message);
-    }
-  }
 }

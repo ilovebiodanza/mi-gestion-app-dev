@@ -1,6 +1,6 @@
 // src/components/TemplateManager.js
 
-import { templateService } from "../services/templates/index.js";
+import { templateService } from "../../services/templates/index.js";
 import { TemplateList } from "./TemplateList.js";
 import { TemplateForm } from "./TemplateForm.js";
 
