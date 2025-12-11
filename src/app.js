@@ -7,7 +7,7 @@ import { TemplateManager } from "./components/TemplateManager.js";
 import { templateService } from "./services/templates/index.js";
 import { DocumentEditor } from "./components/DocumentEditor.js";
 import { VaultList } from "./components/VaultList.js";
-import { DocumentViewer } from "./components/DocumentViewer.js";
+import { DocumentViewer } from "./components/viewer/DocumentViewer.js";
 import { SettingsManager } from "./components/SettingsManager.js";
 
 console.log("🚀 Mi Gestión - Sistema Iniciado (Tema Colorido)");

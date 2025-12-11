@@ -1,8 +1,13 @@
-// src/components/DocumentViewer.js
-import { documentService } from "../services/documents/index.js";
-import { templateService } from "../services/templates/index.js";
-import { encryptionService } from "../services/encryption/index.js";
-import { getLocalCurrency, detectMediaType } from "../utils/helpers.js"; // <--- Importamos detectMediaType
+import { documentService } from "../../services/documents/index.js";
+import { templateService } from "../../services/templates/index.js";
+import { encryptionService } from "../../services/encryption/index.js";
+import { copyToWhatsApp } from "./WhatsAppExporter.js";
+import { printDocument } from "./PrintExporter.js";
+import { getLocalCurrency } from "../../utils/helpers.js";
+
+// --- NUEVOS IMPORTS ---
+import { globalPlayer } from "../common/MediaPlayer.js";
+import * as FieldRenderers from "./FieldRenderers.js";
 
 export class DocumentViewer {
   constructor(docId, onBack) {
@@ -39,6 +44,7 @@ export class DocumentViewer {
       this.decryptedData = await encryptionService.decryptDocument(
         this.document.encryptedContent
       );
+      // Inicializar estados de tablas
       this.template.fields.forEach((f) => {
         if (f.type === "table")
           this.tableStates[f.id] = {
@@ -54,9 +60,43 @@ export class DocumentViewer {
     }
   }
 
+  // --- LÓGICA DE DELEGACIÓN A FIELDRENDERERS ---
+  renderFieldValue(type, value, isTableContext = false) {
+    if (
+      value === undefined ||
+      value === null ||
+      (typeof value === "string" && value.trim() === "")
+    ) {
+      return '<span class="text-slate-300 italic text-xs select-none">Vacío</span>';
+    }
+
+    switch (type) {
+      case "url":
+        return FieldRenderers.renderUrlField(value, isTableContext);
+      case "boolean":
+        return FieldRenderers.renderBoolean(value);
+      case "date":
+        return FieldRenderers.renderDate(value);
+      case "currency":
+        return FieldRenderers.renderCurrency(value, this.currencyConfig);
+      case "percentage":
+        return FieldRenderers.renderPercentage(value);
+      case "secret":
+        return FieldRenderers.renderSecret(value, isTableContext);
+      case "text":
+        return FieldRenderers.renderText(value, isTableContext);
+      default:
+        return String(value);
+    }
+  }
+
   renderContent() {
     const container = document.getElementById("documentViewerPlaceholder");
     if (!container) return;
+
+    // Inicializar el Player Base (si no existe)
+    globalPlayer.renderBase();
+
     const updatedAt = new Date(
       this.document.metadata.updatedAt
     ).toLocaleDateString("es-ES", {
@@ -68,8 +108,7 @@ export class DocumentViewer {
     });
 
     const fieldsHtml = this.template.fields
-      .map((field, index) => {
-        // Configuración de Grid
+      .map((field) => {
         const isFullWidth = ["separator", "table", "text"].includes(field.type);
         const spanClass = isFullWidth
           ? "col-span-1 md:col-span-2 print:col-span-2"
@@ -91,6 +130,7 @@ export class DocumentViewer {
             value
           )}</div>`;
 
+        // Aquí llamamos al nuevo método refactorizado que llama a FieldRenderers
         const displayValue = this.renderFieldValue(field.type, value);
 
         return `
@@ -159,136 +199,101 @@ export class DocumentViewer {
             </div>
          </div>
       </div>
-
-      <div id="mediaModal" class="fixed inset-0 z-[60] hidden">
-         <div class="absolute inset-0 bg-slate-900/90 backdrop-blur-md transition-opacity" id="mediaModalBackdrop"></div>
-         <div class="relative w-full h-full flex items-center justify-center p-4">
-             <button id="closeMediaModal" class="absolute top-4 right-4 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 w-10 h-10 rounded-full flex items-center justify-center transition backdrop-blur-sm z-50">
-                <i class="fas fa-times text-xl"></i>
-             </button>
-             <div class="relative max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl shadow-2xl animate-scale-in">
-                 <img id="mediaModalImage" src="" alt="Vista previa" class="max-w-full max-h-[90vh] object-contain bg-black/50" />
-                 <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent text-white text-center opacity-0 hover:opacity-100 transition-opacity">
-                    <a id="mediaModalLink" href="#" target="_blank" class="text-sm hover:underline text-white/90">Abrir original en nueva pestaña</a>
-                 </div>
-             </div>
-         </div>
-      </div>
     `;
     this.setupContentListeners();
   }
 
-  // --- RENDERING INTELIGENTE ---
-  renderFieldValue(type, value, isTableContext = false) {
-    if (
-      value === undefined ||
-      value === null ||
-      (typeof value === "string" && value.trim() === "")
-    ) {
-      return '<span class="text-slate-300 italic text-xs select-none">Vacío</span>';
+  // 2. Agrega este nuevo método a la clase DocumentViewer
+  // En src/components/viewer/DocumentViewer.js
+
+  showPrintOptions() {
+    // 1. Si NO existe el modal, lo creamos (HTML)
+    if (!document.getElementById("printOptionsModal")) {
+      const modalHtml = `
+        <div id="printOptionsModal" class="fixed inset-0 z-[70] flex items-center justify-center p-4 hidden"> <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" id="printModalBackdrop"></div>
+            <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-fade-in-up">
+                <div class="p-6 text-center">
+                    <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 text-xl">
+                        <i class="fas fa-print"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800 mb-2">Selecciona Formato</h3>
+                    <p class="text-sm text-slate-500 mb-6">¿Cómo deseas imprimir este documento?</p>
+                    
+                    <div class="space-y-3">
+                        <button id="printStandardBtn" class="w-full flex items-center p-3 border border-slate-200 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-all group text-left">
+                            <div class="w-10 h-10 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 shadow-sm mr-3">
+                                <i class="fas fa-id-card"></i>
+                            </div>
+                            <div>
+                                <span class="block font-bold text-slate-700 text-sm">Estilo Tarjeta (Visual)</span>
+                                <span class="block text-xs text-slate-400">Mejor para presentación</span>
+                            </div>
+                        </button>
+
+                        <button id="printCompactBtn" class="w-full flex items-center p-3 border border-slate-200 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 transition-all group text-left">
+                            <div class="w-10 h-10 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-emerald-600 shadow-sm mr-3">
+                                <i class="fas fa-compress-alt"></i>
+                            </div>
+                            <div>
+                                <span class="block font-bold text-slate-700 text-sm">Compacto (Ahorro)</span>
+                                <span class="block text-xs text-slate-400">Menos espacio, más datos</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-slate-50 p-3 text-center border-t border-slate-100">
+                    <button id="cancelPrintBtn" class="text-xs font-bold text-slate-500 hover:text-slate-800 uppercase tracking-wide">Cancelar</button>
+                </div>
+            </div>
+        </div>`;
+      document.body.insertAdjacentHTML("beforeend", modalHtml);
     }
 
-    switch (type) {
-      case "url":
-        let url = typeof value === "object" ? value.url : value;
-        let text = typeof value === "object" ? value.text || url : value;
-        if (!url) return '<span class="text-slate-300 italic">--</span>';
+    // 2. Referencias a elementos
+    const modal = document.getElementById("printOptionsModal");
+    const closeFn = () => modal.classList.add("hidden");
 
-        // Detección de Multimedia
-        const mediaType = detectMediaType(url);
+    // 3. LISTENERS DE CIERRE (Reasignarlos siempre es seguro)
+    document.getElementById("printModalBackdrop").onclick = closeFn;
+    document.getElementById("cancelPrintBtn").onclick = closeFn;
 
-        // 1. IMAGEN
-        if (mediaType === "image") {
-          const display = text === url ? "Ver Imagen" : text;
-          if (isTableContext) {
-            return `<button class="view-media-btn inline-flex items-center gap-1.5 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-colors" data-src="${url}" data-type="image">
-                          <i class="fas fa-image"></i> <span>Imagen</span>
-                        </button>`;
-          }
-          return `
-                <div class="flex items-center gap-3">
-                    <div class="relative group cursor-pointer view-media-btn overflow-hidden rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all bg-slate-50" data-src="${url}" data-type="image">
-                        <div class="h-16 w-24 bg-slate-200 flex items-center justify-center text-slate-400 group-hover:scale-105 transition-transform duration-500">
-                            <i class="fas fa-image text-2xl"></i>
-                        </div>
-                        <div class="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors">
-                            <i class="fas fa-search-plus text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md"></i>
-                        </div>
-                    </div>
-                    <div>
-                        <p class="font-bold text-slate-700 text-sm">${display}</p>
-                        <a href="${url}" target="_blank" class="text-xs text-blue-500 hover:underline flex items-center gap-1 mt-0.5">
-                            Abrir enlace <i class="fas fa-external-link-alt text-[10px]"></i>
-                        </a>
-                    </div>
-                </div>`;
-        }
+    // --- CORRECCIÓN CLAVE AQUÍ ---
+    // 4. SOBRESCRIBIMOS los eventos onclick CADA VEZ que se llama a la función.
+    // Esto asegura que 'this' se refiera a la instancia del documento ACTUAL (Estado Financiero),
+    // y no a la instancia vieja (Historia de Salud) que creó el modal originalmente.
 
-        // 2. AUDIO
-        if (mediaType === "audio") {
-          const display = text === url ? "Archivo de Audio" : text;
-          if (isTableContext) {
-            return `<a href="${url}" target="_blank" class="inline-flex items-center gap-1.5 text-pink-600 hover:underline font-medium"><i class="fas fa-headphones"></i> Audio</a>`;
-          }
-          return `
-                <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm max-w-md">
-                    <div class="flex items-center gap-2 mb-2">
-                        <div class="w-8 h-8 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center flex-shrink-0">
-                            <i class="fas fa-music text-xs"></i>
-                        </div>
-                        <p class="text-xs font-bold text-slate-600 truncate">${display}</p>
-                    </div>
-                    <audio controls class="w-full h-8 rounded-lg outline-none custom-audio">
-                        <source src="${url}">
-                        Tu navegador no soporta audio.
-                    </audio>
-                </div>`;
-        }
+    document.getElementById("printStandardBtn").onclick = () => {
+      this.triggerPrint(false);
+      closeFn();
+    };
 
-        // 3. ENLACE NORMAL
-        const displayLink =
-          isTableContext && text.length > 20
-            ? text.substring(0, 18) + "..."
-            : text;
-        return `
-            <a href="${url}" target="_blank" class="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:underline font-medium transition-colors break-all">
-                <i class="fas fa-link text-xs opacity-50 flex-shrink-0"></i> ${displayLink}
-            </a>`;
+    document.getElementById("printCompactBtn").onclick = () => {
+      this.triggerPrint(true);
+      closeFn();
+    };
 
-      case "boolean":
-        return value
-          ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700"><i class="fas fa-check mr-1"></i> Sí</span>'
-          : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-500">No</span>';
-      case "date":
-        try {
-          const [y, m, d] = String(value).split("-");
-          const dateObj = new Date(y, m - 1, d);
-          return `<span class="font-semibold text-slate-700"><i class="far fa-calendar text-slate-400 mr-2"></i>${dateObj.toLocaleDateString()}</span>`;
-        } catch {
-          return value;
-        }
-      case "currency":
-        const formatted = new Intl.NumberFormat(this.currencyConfig.locale, {
-          style: "currency",
-          currency: this.currencyConfig.codigo,
-        }).format(Number(value));
-        return `<span class="font-mono font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">${formatted}</span>`;
-      case "percentage":
-        return `<span class="font-mono font-bold text-slate-700">${value}%</span>`;
-      case "secret":
-        if (isTableContext)
-          return `<div class="group cursor-pointer select-none"><span class="blur-sm group-hover:blur-none transition-all font-mono text-xs bg-slate-100 px-1 rounded">••••••</span></div>`;
-        return `<div class="flex items-center gap-2"><div class="relative group overflow-hidden rounded-lg border border-slate-200 bg-white px-3 py-2 transition-all hover:border-indigo-200 hover:shadow-sm w-full"><span class="secret-mask filter blur-[5px] select-none transition-all duration-300 group-hover:blur-none font-mono text-sm text-slate-800 tracking-wider">••••••••••••••</span><span class="secret-revealed hidden font-mono text-sm text-slate-800 select-all font-bold tracking-wide">${value}</span></div><button class="toggle-secret-btn w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors bg-white border border-slate-200" title="Revelar"><i class="fas fa-eye"></i></button><button class="copy-btn w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors bg-white border border-slate-200" data-value="${value}" title="Copiar"><i class="far fa-copy"></i></button></div>`;
-      case "text":
-        if (isTableContext)
-          return value.length > 30 ? value.substring(0, 30) + "..." : value;
-        return `<div class="prose prose-sm max-w-none text-slate-600 whitespace-pre-line">${value}</div>`;
-      default:
-        return String(value);
-    }
+    // 5. Mostrar modal
+    modal.classList.remove("hidden");
   }
 
-  // --- LISTENERS ---
+  // 3. Método auxiliar para llamar al exporter
+  triggerPrint(isCompact) {
+    const dataToPrint = {
+      ...this.document.metadata,
+      id: this.document.id,
+    };
+    // Importante: Ahora pasamos el 4to argumento 'isCompact'
+    // Asegúrate de importar printDocument arriba
+    import("./PrintExporter.js").then((module) => {
+      module.printDocument(
+        dataToPrint,
+        this.template,
+        this.decryptedData,
+        isCompact
+      );
+    });
+  }
+
   setupContentListeners() {
     ["backBtn"].forEach((id) =>
       document
@@ -301,16 +306,18 @@ export class DocumentViewer {
     document
       .getElementById("editDocBtn")
       ?.addEventListener("click", () => this.handleEdit());
+
     document
       .getElementById("pdfDocBtn")
-      ?.addEventListener("click", () => window.print());
+      ?.addEventListener("click", () => this.showPrintOptions());
+
     document
       .getElementById("whatsappDocBtn")
       ?.addEventListener("click", () => this.handleCopyToWhatsApp());
 
     const container = document.getElementById("documentViewerPlaceholder");
 
-    // Listeners Tabla
+    // Listeners Tabla (Search)
     container.querySelectorAll(".table-search-input").forEach((input) => {
       input.addEventListener("input", (e) => {
         const fieldId = e.target.dataset.fieldId;
@@ -319,9 +326,22 @@ export class DocumentViewer {
       });
     });
 
-    // Delegación General
+    // --- DELEGACIÓN DE EVENTOS CENTRALIZADA ---
     container.addEventListener("click", (e) => {
-      // Sort Tabla
+      // 1. NUEVO: Trigger del MediaPlayer (El botón que agregamos en FieldRenderers)
+      const mediaBtn = e.target.closest(".trigger-media-btn");
+      if (mediaBtn) {
+        e.preventDefault(); // Evitar que el click propague si hay algo más
+        const src = mediaBtn.dataset.src;
+        const type = mediaBtn.dataset.type;
+        const title = mediaBtn.dataset.title;
+
+        // LLAMADA AL SINGLETON DEL REPRODUCTOR
+        globalPlayer.open(type, src, title);
+        return;
+      }
+
+      // 2. Sort Tabla
       const header = e.target.closest(".table-header-sort");
       if (header) {
         const fieldId = header.dataset.fieldId;
@@ -336,7 +356,7 @@ export class DocumentViewer {
         this.refreshTableFieldHTML(fieldId);
       }
 
-      // Secretos
+      // 3. Secretos (Reveal/Hide)
       const toggleBtn = e.target.closest(".toggle-secret-btn");
       if (toggleBtn) {
         const wrapper = toggleBtn.parentElement;
@@ -355,6 +375,8 @@ export class DocumentViewer {
           toggleBtn.classList.remove("text-primary");
         }
       }
+
+      // 4. Copiar Texto
       const copyBtn = e.target.closest(".copy-btn");
       if (copyBtn) {
         navigator.clipboard.writeText(copyBtn.dataset.value);
@@ -363,29 +385,16 @@ export class DocumentViewer {
         setTimeout(() => (icon.className = "far fa-copy"), 1500);
       }
 
-      // Detalles Fila
+      // 5. Detalles Fila (Modales de tablas complejas)
       const viewRowBtn = e.target.closest(".view-row-btn");
       if (viewRowBtn)
         this.openRowModal(
           viewRowBtn.dataset.fieldId,
           parseInt(viewRowBtn.dataset.rowIndex)
         );
-
-      // NUEVO: Abrir Imagen en Modal
-      const mediaBtn = e.target.closest(".view-media-btn");
-      if (mediaBtn && mediaBtn.dataset.type === "image") {
-        const src = mediaBtn.dataset.src;
-        const modal = document.getElementById("mediaModal");
-        const img = document.getElementById("mediaModalImage");
-        const link = document.getElementById("mediaModalLink");
-
-        img.src = src;
-        link.href = src;
-        modal.classList.remove("hidden");
-      }
     });
 
-    // Modales (Row Detail & Media)
+    // Modales (Row Detail) - Nota: Se eliminó el "mediaModal" viejo
     const rowModal = document.getElementById("rowDetailModal");
     const closeRowModal = () => rowModal.classList.add("hidden");
     rowModal
@@ -394,22 +403,15 @@ export class DocumentViewer {
     document
       .getElementById("modalBackdrop")
       ?.addEventListener("click", closeRowModal);
-
-    const mediaModal = document.getElementById("mediaModal");
-    const closeMediaModal = () => {
-      mediaModal.classList.add("hidden");
-      document.getElementById("mediaModalImage").src = ""; // Limpiar src
-    };
-    document
-      .getElementById("closeMediaModal")
-      ?.addEventListener("click", closeMediaModal);
-    document
-      .getElementById("mediaModalBackdrop")
-      ?.addEventListener("click", closeMediaModal);
   }
 
-  // ... (El resto de métodos auxiliares son idénticos a los anteriores) ...
+  // ... [MANTENER EL RESTO DE MÉTODOS DE TABLA IGUALES] ...
+  // (renderTableField, getProcessedRows, updateTableUI, generateTableBodyHtml, refreshTableFieldHTML, openRowModal, etc.)
+  // COPIA Y PEGA LOS MÉTODOS DE TABLA DE TU CÓDIGO ORIGINAL AQUÍ ABAJO
+  // Para ahorrar espacio en esta respuesta, asumo que mantienes esos métodos sin cambios.
+
   renderTableField(field, value) {
+    // ... (Código original de renderTableField)
     const rows = Array.isArray(value) ? value : [];
     if (rows.length === 0)
       return `<div class="p-6 border border-dashed border-slate-200 rounded-xl bg-slate-50 text-center text-xs text-slate-400 flex flex-col items-center gap-2"><i class="fas fa-table text-xl opacity-20"></i>Tabla vacía</div>`;
@@ -458,9 +460,13 @@ export class DocumentViewer {
       field.id
     }"></div><div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm ring-1 ring-slate-100"><div class="overflow-x-auto"><table class="min-w-full"><thead class="bg-slate-50/50 border-b border-slate-100"><tr>${headers}${
       isComplex ? "<th></th>" : ""
-    }</tr></thead><tbody>${body}</tbody></table></div></div></div>`;
+    }</tr></thead><tbody id="tbody-${
+      field.id
+    }">${body}</tbody></table></div></div></div>`;
   }
+
   getProcessedRows(field, rows) {
+    // ... (Código original de getProcessedRows)
     const state = this.tableStates[field.id] || {
       search: "",
       sortCol: null,
@@ -504,38 +510,50 @@ export class DocumentViewer {
     }
     return processed;
   }
+
   updateTableUI(fieldId) {
+    // ... (Código original)
     const field = this.template.fields.find((f) => f.id === fieldId);
     const rows = this.decryptedData[fieldId] || [];
     const processed = this.getProcessedRows(field, rows);
     const tbody = document.getElementById(`tbody-${fieldId}`);
     if (tbody) tbody.innerHTML = this.generateTableBodyHtml(field, processed);
   }
+
   generateTableBodyHtml(field, rows) {
+    // ... (Código original)
     return this.renderTableField(field, rows).match(/<tbody>(.*?)<\/tbody>/)[1];
   }
+
   refreshTableFieldHTML(fieldId) {
+    // ... (Código original)
     const field = this.template.fields.find((f) => f.id === fieldId);
     const rows = this.decryptedData[fieldId] || [];
-    const table = document.getElementById(`table-${fieldId}`);
-    if (table) {
-      const containerDiv = table.closest(".col-span-full");
-      if (containerDiv) {
-        containerDiv.outerHTML = this.renderTableField(field, rows);
-        const newContainer = document
-          .getElementById(`table-${fieldId}`)
-          .closest(".col-span-full");
-        const input = newContainer.querySelector(".table-search-input");
-        if (input) {
-          input.addEventListener("input", (e) => {
-            this.tableStates[fieldId].search = e.target.value;
-            this.updateTableUI(fieldId);
-          });
-        }
+    const table = document.getElementById(`table-${fieldId}`); // Nota: Asegúrate que tus tablas tengan ID o usa el selector anterior
+    // Como tu renderTableField no pone ID a la tabla, usaré el selector por contexto que tenías:
+    // Pero tu renderTableField devulve un string...
+    // Mantenemos la lógica original tuya:
+    const containerDiv = document
+      .querySelector(`.table-search-input[data-field-id="${fieldId}"]`)
+      .closest(".col-span-full");
+    if (containerDiv) {
+      containerDiv.outerHTML = this.renderTableField(field, rows);
+      // Re-attach listener
+      const newContainer = document
+        .querySelector(`.table-search-input[data-field-id="${fieldId}"]`)
+        .closest(".col-span-full");
+      const input = newContainer.querySelector(".table-search-input");
+      if (input) {
+        input.addEventListener("input", (e) => {
+          this.tableStates[fieldId].search = e.target.value;
+          this.updateTableUI(fieldId);
+        });
       }
     }
   }
+
   openRowModal(fieldId, rowIndex) {
+    // ... (Código original)
     const field = this.template.fields.find((f) => f.id === fieldId);
     if (!field) return;
     const rowsOriginal = this.decryptedData[fieldId] || [];
@@ -555,12 +573,16 @@ export class DocumentViewer {
     document.getElementById("rowDetailContent").innerHTML = content;
     document.getElementById("rowDetailModal").classList.remove("hidden");
   }
+
   renderLoading() {
+    // ... (Igual al original)
     document.getElementById(
       "documentViewerPlaceholder"
     ).innerHTML = `<div class="flex flex-col items-center justify-center py-24"><div class="animate-spin rounded-full h-12 w-12 border-4 border-slate-200 border-t-primary mb-4"></div><p class="text-slate-400 animate-pulse">Desencriptando documento...</p></div>`;
   }
+
   renderError(msg) {
+    // ... (Igual al original)
     document.getElementById(
       "documentViewerPlaceholder"
     ).innerHTML = `<div class="max-w-2xl mx-auto mt-10 p-6 bg-red-50 border border-red-100 rounded-xl text-center"><i class="fas fa-exclamation-circle text-4xl text-red-400 mb-4"></i><h3 class="text-red-800 font-bold text-lg">Error de Carga</h3><p class="text-red-600 mt-2">${msg}</p><button id="backBtn" class="mt-6 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition">Volver</button></div>`;
@@ -568,7 +590,9 @@ export class DocumentViewer {
       .getElementById("backBtn")
       ?.addEventListener("click", () => this.onBack());
   }
+
   async handleDelete() {
+    // ... (Igual al original)
     if (!confirm("¿Estás seguro de eliminar este documento permanentemente?"))
       return;
     try {
@@ -578,7 +602,9 @@ export class DocumentViewer {
       alert(error.message);
     }
   }
+
   handleEdit() {
+    // ... (Igual al original)
     this.onBack({
       documentId: this.docId,
       template: this.template,
@@ -586,54 +612,27 @@ export class DocumentViewer {
       metadata: this.document.metadata,
     });
   }
+
   async handleCopyToWhatsApp() {
+    const btn = document.getElementById("whatsappDocBtn");
+    // Feedback visual de "Cargando..."
+    const originalIcon = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin text-lg"></i>';
+
     try {
-      let waText = `*${this.document.metadata.title}*\n_${this.template.name}_\n\n`;
-      this.template.fields.forEach((field, index) => {
-        const value = this.decryptedData[field.id];
-        if (field.type === "separator") return;
-        if (field.type === "table") {
-          const rows = Array.isArray(value) ? value : [];
-          waText += `*${field.label}:* ${
-            rows.length === 0 ? "_Sin datos_" : ""
-          }\n`;
-          rows.forEach((r, i) => {
-            waText += `  ${i + 1}. `;
-            field.columns?.forEach(
-              (c) =>
-                (waText += `${c.label}: ${this.getFormattedValueForText(
-                  c.type,
-                  r[c.id]
-                )} | `)
-            );
-            waText += `\n`;
-          });
-        } else {
-          waText += `*${field.label}:* ${this.getFormattedValueForText(
-            field.type,
-            value
-          )}\n`;
-        }
-      });
-      waText += `\n_Enviado desde Mi Gestión_`;
-      await navigator.clipboard.writeText(waText);
-      const btn = document.getElementById("whatsappDocBtn");
+      await copyToWhatsApp(
+        this.document.metadata,
+        this.template,
+        this.decryptedData,
+        this.currencyConfig
+      );
+
+      // Feedback de Éxito
       btn.innerHTML = '<i class="fas fa-check text-green-500 text-lg"></i>';
-      setTimeout(
-        () => (btn.innerHTML = '<i class="fab fa-whatsapp text-lg"></i>'),
-        2000
-      );
+      setTimeout(() => (btn.innerHTML = originalIcon), 2000);
     } catch (e) {
-      console.error(e);
+      alert("Error al copiar para WhatsApp");
+      btn.innerHTML = originalIcon;
     }
-  }
-  getFormattedValueForText(type, value) {
-    if (value === undefined || value === null || value === "") return "_N/A_";
-    if (type === "boolean") return value ? "Sí" : "No";
-    if (type === "currency")
-      return new Intl.NumberFormat(this.currencyConfig.locale).format(
-        Number(value)
-      );
-    return String(value);
   }
 }
