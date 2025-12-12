@@ -217,7 +217,6 @@ export class DocumentEditor {
       try {
         columnsDef = JSON.parse(container.nextElementSibling.textContent);
       } catch (e) {}
-
       const renderTableFromJSON = () => {
         tbody.innerHTML = "";
         let currentData = [];

@@ -30,7 +30,7 @@ export function renderCellPreview(col, val) {
     }</span>`;
   }
   // Vista previa corta para textos largos
-  if (col.type === "textarea" || col.type === "longText") {
+  if (col.type === "text") {
     const shortVal =
       typeof val === "string" && val.length > 30
         ? val.substring(0, 30) + "..."
@@ -112,12 +112,12 @@ export function renderCellInput(col, val) {
   }
 
   // AQUÍ ESTÁ LA LÓGICA DEL TEXTAREA
-  if (col.type === "textarea" || col.type === "longText") {
+  if (col.type === "text") {
     return `
       <div class="p-1">
         <textarea class="${commonClass} rounded-lg hover:bg-slate-50 focus:bg-white focus:ring-2 focus:ring-primary/10 transition-all cell-input resize-y min-h-[40px]" 
                   data-col-id="${col.id}" 
-                  rows="1"
+                  rows="4"
                   placeholder="Escribir...">${value}</textarea>
       </div>`;
   }

@@ -310,6 +310,7 @@ export class TemplateForm {
       const fields = this.collectFields(
         document.getElementById("fieldsContainer")
       );
+
       if (fields.length === 0)
         throw new Error("Agrega al menos un campo para guardar la plantilla.");
 
