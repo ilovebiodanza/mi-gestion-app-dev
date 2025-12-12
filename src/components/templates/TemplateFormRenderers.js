@@ -5,7 +5,7 @@ import { getFieldTypesConfig } from "../../utils/field-types-config.js";
 /**
  * Renderiza la estructura principal del formulario de plantilla.
  */
-export function renderMainLayout(isEditing, initialData) {
+export function renderMainLayout(isEditing, initialData, fieldsHtml = "") {
   const categoryOptions = [
     { value: "custom", label: "Personalizado" },
     { value: "personal", label: "Personal" },
@@ -23,11 +23,12 @@ export function renderMainLayout(isEditing, initialData) {
   const initialColor = initialData?.color || "#4F46E5";
 
   return `
-      <div class="max-w-4xl mx-auto animate-fade-in-up pb-24">
-          <div class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 py-4 px-1 shadow-sm mb-8 -mx-4 sm:mx-0 sm:rounded-b-2xl transition-all">
-            <div class="flex flex-col sm:flex-row justify-between items-center gap-4 max-w-4xl mx-auto">
+      <div class="max-w-4xl mx-auto animate-fade-in-up pb-24 flex flex-col gap-6">
+          
+          <div class="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-4 shadow-sm sticky top-4 z-40 transition-all">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div class="flex items-center">
-                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center mr-4 shadow-lg shadow-indigo-500/20">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary text-white flex items-center justify-center mr-4 shadow-lg shadow-indigo-500/20 flex-shrink-0">
                         <i class="fas fa-${
                           isEditing ? "pen-nib" : "magic"
                         } text-xl"></i>
@@ -47,7 +48,7 @@ export function renderMainLayout(isEditing, initialData) {
                      <button type="button" id="cancelTemplate" class="flex-1 sm:flex-none px-5 py-2.5 bg-white border border-slate-300 text-slate-600 rounded-xl hover:bg-slate-50 hover:text-slate-800 transition font-bold text-sm shadow-sm">
                         Cancelar
                      </button>
-                     <button type="submit" form="templateForm" class="flex-1 sm:flex-none px-6 py-2.5 bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary-hover text-white rounded-xl shadow-lg shadow-indigo-500/30 transition transform active:scale-95 font-bold text-sm flex items-center justify-center gap-2">
+                     <button type="button" id="saveTemplateBtnHeader" class="flex-1 sm:flex-none px-6 py-2.5 bg-gradient-to-r from-primary to-secondary hover:from-primary-hover hover:to-secondary-hover text-white rounded-xl shadow-lg shadow-indigo-500/30 transition transform active:scale-95 font-bold text-sm flex items-center justify-center gap-2">
                           <i class="fas fa-save"></i> <span>Guardar</span>
                      </button>
                 </div>
@@ -55,6 +56,7 @@ export function renderMainLayout(isEditing, initialData) {
           </div>
           
           <form id="templateForm" class="space-y-6">
+              
               <div class="bg-white p-6 sm:p-8 rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
                   <div class="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
                      <i class="fas fa-info-circle text-indigo-400"></i>
@@ -131,7 +133,7 @@ export function renderMainLayout(isEditing, initialData) {
                     </button>
                   </div>
 
-                  <div id="fieldsContainer" class="space-y-4">
+                  <div id="fieldsContainer" class="space-y-4">${fieldsHtml}
                       </div>
                   
                   <div id="noFieldsMessage" class="hidden flex flex-col items-center justify-center py-16 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/30 mt-4 transition-all hover:bg-slate-50 hover:border-indigo-200 group cursor-pointer" onclick="document.getElementById('addFieldBtn').click()">
@@ -144,7 +146,6 @@ export function renderMainLayout(isEditing, initialData) {
               </div>
           </form>
       </div>
-      
       ${renderColumnsModalHTML()}
     `;
 }
@@ -158,7 +159,6 @@ export function renderFieldItemConfig(field = null, index = 0) {
   const fieldTypes = getFieldTypesConfig();
   const isSeparator = field?.type === "separator";
 
-  // Estilos condicionales
   const cardBg = isSeparator
     ? "bg-slate-50 border-slate-300 shadow-inner"
     : "bg-white border-slate-200 hover:shadow-lg hover:border-primary/50";

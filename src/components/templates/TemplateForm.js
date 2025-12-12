@@ -14,28 +14,14 @@ export class TemplateForm {
   }
 
   render(template = null) {
-    // 1. Renderiza el esqueleto principal (delegado al renderer)
-    const html = renderMainLayout(!!template, template);
-
-    // 2. Necesitamos inyectar los campos iniciales después de que el HTML esté en el DOM?
-    // En este enfoque, renderMainLayout ya devuelve el string completo, pero los campos
-    // dinámicos se insertan "on-the-fly" en el setupListeners o debemos hacerlo aquí.
-
-    // MEJORA: Vamos a inyectar los campos en el HTML string antes de devolverlo.
-    // Esto evita parpadeos.
+    // 1. PRIMERO generamos el HTML de los campos (si existen)
     const fieldsHtml = (template?.fields || [])
       .map((f, i) => renderFieldItemConfig(f, i))
       .join("");
 
-    // Usamos un placeholder simple en el Renderer o reemplazamos el innerHTML luego.
-    // Como el renderer devuelve string, una forma fácil es reemplazar el comentario o div vacío.
-    // Pero para ser más limpios, lo haremos en setupListeners (render inicial)
-    // O mejor aún: modifiquemos renderMainLayout para no tener que inyectar manual.
-    // --
-    // Para no complicar el Renderer, haremos la inserción en el setupListeners,
-    // pero para que se vea data inicial, podemos hacer un replace simple aquí:
-
-    return html.replace("", fieldsHtml);
+    // 2. LUEGO llamamos al layout pasando los campos ya generados
+    // Esto asegura que se coloquen dentro del <div id="fieldsContainer">
+    return renderMainLayout(!!template, template, fieldsHtml);
   }
 
   setupListeners(container) {
@@ -55,11 +41,11 @@ export class TemplateForm {
 
     // Inicializar Drag & Drop principal
     this.initSortable(container.querySelector("#fieldsContainer"), "main");
-    this.updateNoFieldsMessage(container); // Validar estado inicial
+    this.updateNoFieldsMessage(container);
 
     const fieldsContainer = container.querySelector("#fieldsContainer");
     if (fieldsContainer) {
-      // Delegación de eventos para los campos
+      // Delegación de eventos para eliminar/configurar campos
       fieldsContainer.addEventListener("click", (e) => {
         if (e.target.closest(".remove-field")) {
           e.target.closest(".field-item").remove();
@@ -70,7 +56,7 @@ export class TemplateForm {
         }
       });
 
-      // Cambio de tipo de campo (re-renderiza el item)
+      // Cambio de tipo de campo
       fieldsContainer.addEventListener("change", (e) => {
         if (e.target.classList.contains("field-type")) {
           const item = e.target.closest(".field-item");
@@ -92,12 +78,22 @@ export class TemplateForm {
       });
     }
 
-    container
-      .querySelector("#templateForm")
-      ?.addEventListener("submit", (e) => {
+    // Botón Guardar (Formulario Principal)
+    const form = container.querySelector("#templateForm");
+    if (form) {
+      form.addEventListener("submit", (e) => {
         e.preventDefault();
         this.saveData();
       });
+    }
+
+    // Botón Guardar (Header)
+    container
+      .querySelector("#saveTemplateBtnHeader")
+      ?.addEventListener("click", () => {
+        if (form) form.dispatchEvent(new Event("submit"));
+      });
+
     container
       .querySelector("#cancelTemplate")
       ?.addEventListener("click", () => this.handlers.onCancel());
@@ -107,15 +103,22 @@ export class TemplateForm {
 
   initSortable(element, type) {
     if (!element || !window.Sortable) return;
-    if (type === "main" && this.mainSortable) this.mainSortable.destroy();
-    if (type === "modal" && this.modalSortable) this.modalSortable.destroy();
+    // Limpieza de instancias previas para evitar conflictos
+    if (type === "main" && this.mainSortable) {
+      this.mainSortable.destroy();
+      this.mainSortable = null;
+    }
+    if (type === "modal" && this.modalSortable) {
+      this.modalSortable.destroy();
+      this.modalSortable = null;
+    }
 
     const config = {
       animation: 200,
       handle: ".drag-handle",
       ghostClass: "sortable-ghost",
       dragClass: "sortable-drag",
-      forceFallback: true,
+      forceFallback: true, // Importante para evitar bugs visuales en algunos navegadores
     };
 
     const sortable = new window.Sortable(element, config);
@@ -138,71 +141,82 @@ export class TemplateForm {
   }
 
   // --- LÓGICA DEL MODAL DE COLUMNAS ---
-
   setupModalListeners() {
     const modal = document.getElementById("columnsModal");
     if (!modal) return;
 
     const close = () => modal.classList.add("hidden");
 
-    // Botones de cierre
-    modal.querySelector("#closeModalTop").onclick = close;
-    modal.querySelector("#cancelModalBtn").onclick = close;
-    modal.querySelector("#closeModalBackdrop").onclick = close;
+    // Listeners de cierre
+    const closeBtnTop = modal.querySelector("#closeModalTop");
+    const cancelBtn = modal.querySelector("#cancelModalBtn");
+    const backdrop = modal.querySelector("#closeModalBackdrop");
 
-    // Función agregar columna
+    if (closeBtnTop) closeBtnTop.onclick = close;
+    if (cancelBtn) cancelBtn.onclick = close;
+    if (backdrop) backdrop.onclick = close;
+
     const addFn = () => {
       const c = modal.querySelector("#modalColumnsContainer");
       const count = c.querySelectorAll(".field-item").length;
-
-      // Reutilizamos renderFieldItemConfig pero le quitamos opciones invalidas luego
       c.insertAdjacentHTML("beforeend", renderFieldItemConfig(null, count));
       const newItem = c.lastElementChild;
 
-      // Limpieza específica para columnas de tabla
+      // Limpiar opciones que no aplican a columnas de tabla
       const select = newItem.querySelector(".field-type");
       [...select.options].forEach((opt) => {
         if (opt.value === "table" || opt.value === "separator") opt.remove();
       });
+      // Ajuste visual para items dentro del modal
       newItem.classList.remove("p-1");
       newItem.classList.add("p-0", "border-slate-200");
-      modal.querySelector("#noColumnsMessage").classList.add("hidden");
+
+      const noColsMsg = modal.querySelector("#noColumnsMessage");
+      if (noColsMsg) noColsMsg.classList.add("hidden");
     };
 
-    modal.querySelector("#addColBtn").onclick = addFn;
-    const emptyBtn = modal.querySelector("#addColBtnEmpty");
-    if (emptyBtn) emptyBtn.onclick = addFn;
+    const addColBtn = modal.querySelector("#addColBtn");
+    const addColBtnEmpty = modal.querySelector("#addColBtnEmpty");
+    if (addColBtn) addColBtn.onclick = addFn;
+    if (addColBtnEmpty) addColBtnEmpty.onclick = addFn;
 
-    // Eventos dentro del modal (Delegación)
     const mc = modal.querySelector("#modalColumnsContainer");
-    mc.onclick = (e) => {
-      if (e.target.closest(".remove-field")) {
-        e.target.closest(".field-item").remove();
-        if (mc.children.length === 0)
-          modal.querySelector("#noColumnsMessage").classList.remove("hidden");
-      }
-    };
+    if (mc) {
+      mc.onclick = (e) => {
+        if (e.target.closest(".remove-field")) {
+          e.target.closest(".field-item").remove();
+          if (mc.children.length === 0) {
+            const noColsMsg = modal.querySelector("#noColumnsMessage");
+            if (noColsMsg) noColsMsg.classList.remove("hidden");
+          }
+        }
+      };
 
-    mc.onchange = (e) => {
-      if (e.target.classList.contains("field-type")) {
-        const item = e.target.closest(".field-item");
-        // Mostrar input de opciones solo si es select
-        item
-          .querySelector(".options-input-group")
-          .classList.toggle("hidden", e.target.value !== "select");
-      }
-    };
+      mc.onchange = (e) => {
+        if (e.target.classList.contains("field-type")) {
+          const item = e.target.closest(".field-item");
+          const optsGroup = item.querySelector(".options-input-group");
+          if (optsGroup) {
+            optsGroup.classList.toggle("hidden", e.target.value !== "select");
+          }
+        }
+      };
+    }
 
-    // Guardar configuración de columnas
-    modal.querySelector("#saveModalBtn").onclick = () => {
-      const columns = this.collectFields(mc);
-      // Guardar JSON en el input oculto del campo padre
-      const parent = this.activeFieldItem;
-      parent.querySelector(".field-columns-data").value =
-        JSON.stringify(columns);
-      parent.querySelector(".columns-count-badge").textContent = columns.length;
-      close();
-    };
+    const saveBtn = modal.querySelector("#saveModalBtn");
+    if (saveBtn) {
+      saveBtn.onclick = () => {
+        const columns = this.collectFields(mc);
+        const parent = this.activeFieldItem;
+        if (parent) {
+          parent.querySelector(".field-columns-data").value =
+            JSON.stringify(columns);
+          const badge = parent.querySelector(".columns-count-badge");
+          if (badge) badge.textContent = columns.length;
+        }
+        close();
+      };
+    }
   }
 
   openColumnsModal(fieldItem) {
@@ -228,30 +242,35 @@ export class TemplateForm {
         if (opt.value === "table" || opt.value === "separator") opt.remove();
       });
 
-      if (col.type === "select")
-        el.querySelector(".options-input-group").classList.remove("hidden");
+      if (col.type === "select") {
+        const optsGroup = el.querySelector(".options-input-group");
+        if (optsGroup) optsGroup.classList.remove("hidden");
+      }
     });
 
     this.initSortable(container, "modal");
-    modal
-      .querySelector("#noColumnsMessage")
-      .classList.toggle("hidden", cols.length > 0);
+
+    const noColsMsg = modal.querySelector("#noColumnsMessage");
+    if (noColsMsg) noColsMsg.classList.toggle("hidden", cols.length > 0);
+
     modal.classList.remove("hidden");
   }
 
-  // Recolector de datos del formulario
   collectFields(container) {
     const fields = [];
     container.querySelectorAll(".field-item").forEach((item, index) => {
-      const label = item.querySelector(".field-label").value.trim();
+      const labelInput = item.querySelector(".field-label");
+      const label = labelInput ? labelInput.value.trim() : "";
       if (!label) return;
 
-      const type = item.querySelector(".field-type").value;
+      const typeSelect = item.querySelector(".field-type");
+      const type = typeSelect ? typeSelect.value : "text";
       const fieldId = item.dataset.fieldId || generateFieldId(label, index);
 
       let options = [];
       if (type === "select") {
-        const txt = item.querySelector(".field-options").value;
+        const optsInput = item.querySelector(".field-options");
+        const txt = optsInput ? optsInput.value : "";
         if (txt)
           options = txt
             .split(",")
@@ -262,16 +281,19 @@ export class TemplateForm {
       let columns = [];
       if (type === "table") {
         try {
-          columns = JSON.parse(item.querySelector(".field-columns-data").value);
+          const colsInput = item.querySelector(".field-columns-data");
+          columns = JSON.parse(colsInput ? colsInput.value : "[]");
         } catch (e) {}
       }
+
+      const reqCheckbox = item.querySelector(".field-required");
 
       fields.push({
         id: fieldId,
         label,
         type,
         order: index + 1,
-        required: item.querySelector(".field-required").checked,
+        required: reqCheckbox ? reqCheckbox.checked : false,
         ...(options.length && { options }),
         ...(columns.length && { columns }),
       });
@@ -281,7 +303,8 @@ export class TemplateForm {
 
   saveData() {
     try {
-      const name = document.getElementById("templateName").value.trim();
+      const nameInput = document.getElementById("templateName");
+      const name = nameInput ? nameInput.value.trim() : "";
       if (!name) throw new Error("Por favor, asigna un nombre a la plantilla.");
 
       const fields = this.collectFields(

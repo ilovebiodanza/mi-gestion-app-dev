@@ -1,5 +1,5 @@
 // Toast.js
-import { getFriendlyErrorMessage } from "./authErrors.js";
+import { getFriendlyErrorMessage } from "../utils//authErrors.js";
 
 export class ToastManager {
   constructor() {

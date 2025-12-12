@@ -1,5 +1,3 @@
-// src/utils/auth-errors.js
-
 // authErrors.js
 
 const errorMessages = {

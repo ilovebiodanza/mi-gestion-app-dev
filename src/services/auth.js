@@ -1,6 +1,6 @@
-// src/services/auth.js
 import { encryptionService } from "./encryption/index.js";
-import { getAuthErrorMessage } from "../utils/auth-errors.js"; // <--- IMPORTAR
+// NOTA: Ya no necesitamos importar getAuthErrorMessage aquí porque el error
+// debe viajar "crudo" hasta app.js para que el Toast decida qué mensaje mostrar.
 
 class AuthService {
   constructor() {
@@ -8,8 +8,6 @@ class AuthService {
     this.db = null;
     this.user = null;
     this.observers = [];
-
-    // Iniciamos la espera activa de Firebase
     this.waitForFirebase();
   }
 
@@ -25,27 +23,20 @@ class AuthService {
       this.db = window.firebaseModules.db;
 
       console.log("🔍 AuthService: Firebase detectado. Iniciando listener...");
-
-      // Listener oficial de Firebase
       const { onAuthStateChanged } = window.firebaseModules;
+
       onAuthStateChanged(this.auth, (user) => {
         console.log(
-          "🔍 AuthService (Listener): Cambio de estado detectado ->",
+          "🔍 AuthService (Listener): Estado ->",
           user ? user.email : "Sin sesión"
         );
         this.updateState(user);
       });
-
-      console.log("✅ AuthService: Conectado exitosamente a Firebase");
     } else {
       console.error("❌ AuthService: Timeout esperando a Firebase CDN.");
-      alert("Error crítico: No se pudieron cargar los servicios de Google.");
     }
   }
 
-  /**
-   * Método centralizado para actualizar estado y avisar a la app
-   */
   updateState(user) {
     this.user = user;
     this.notifyObservers(user);
@@ -53,14 +44,10 @@ class AuthService {
 
   subscribe(observer) {
     this.observers.push(observer);
-    // Si ya sabemos quién es el usuario, avisar al nuevo suscriptor de inmediato
-    if (this.user !== null) {
-      observer(this.user);
-    }
+    if (this.user !== null) observer(this.user);
   }
 
   notifyObservers(user) {
-    // console.log(`🔍 AuthService: Notificando a ${this.observers.length} observadores.`);
     this.observers.forEach((obs) => obs(user));
   }
 
@@ -83,16 +70,17 @@ class AuthService {
         email,
         password
       );
-      console.log("🔍 AuthService: Login exitoso en nube.");
 
-      // 2. ACTUALIZACIÓN MANUAL (Opcional, pero segura)
+      console.log("🔍 AuthService: Login exitoso.");
       this.updateState(userCredential.user);
 
       return { success: true, user: userCredential.user };
     } catch (error) {
-      console.error("Error Registro:", error);
-      // Si decides devolver objeto en lugar de throw, usas el mapper compartido:
-      return { success: false, error: getAuthErrorMessage(error.code) };
+      console.error("Error Login:", error.code);
+      // --- CORRECCIÓN CRÍTICA ---
+      // Antes retornabas un objeto, lo que el sistema interpretaba como "éxito".
+      // Ahora lanzamos el error para que AuthForms lo capture y active el Toast.
+      throw error;
     }
   }
 
@@ -106,20 +94,13 @@ class AuthService {
         password
       );
 
-      // Inicializar cifrado para usuario nuevo
       await this.initializeEncryption(password);
-
-      // Notificación manual por si acaso
       this.updateState(userCredential.user);
 
       return { success: true, user: userCredential.user };
     } catch (error) {
-      // Nota: En registro sí solemos devolver objeto success/error porque
-      // a veces queremos manejarlo distinto, pero si tu UI espera throw,
-      // deberías usar throw error aquí también.
-      // Por ahora mantengo tu estructura original para registro si te funciona bien.
       console.error("Error Registro:", error);
-      throw error; // Recomendado unificar comportamiento con Login
+      throw error; // Esto ya estaba bien
     }
   }
 
@@ -133,10 +114,7 @@ class AuthService {
       }
       const { signOut } = window.firebaseModules;
       await signOut(this.auth);
-
-      // Notificación manual de salida
       this.updateState(null);
-
       return { success: true };
     } catch (error) {
       console.error(error);
@@ -149,27 +127,6 @@ class AuthService {
     try {
       const { sendPasswordResetEmail } = window.firebaseModules;
       await sendPasswordResetEmail(this.auth, email);
-      return { success: true, message: "Correo enviado" };
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  async changeAccessPassword(newPassword, currentPassword) {
-    try {
-      const user = this.auth.currentUser;
-      if (!user) throw new Error("No sesión");
-      const {
-        updatePassword,
-        reauthenticateWithCredential,
-        EmailAuthProvider,
-      } = window.firebaseModules;
-      const credential = EmailAuthProvider.credential(
-        user.email,
-        currentPassword
-      );
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
       return { success: true };
     } catch (error) {
       throw error;
@@ -179,10 +136,8 @@ class AuthService {
   // --- BÓVEDA ---
 
   async initializeEncryption(password) {
-    // Si la llamada viene antes de que Firebase detecte el usuario, usamos this.auth.currentUser
     const user = this.user || this.auth?.currentUser;
     if (!user) throw new Error("Usuario no autenticado (AuthService)");
-
     return await encryptionService.initialize(password, user.uid);
   }
 }

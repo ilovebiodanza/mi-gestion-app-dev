@@ -1,4 +1,5 @@
 // src/app.js
+import { toast } from "./components/Toast.js";
 import { authService } from "./services/auth.js";
 import { AuthForms } from "./components/AuthForms.js";
 import { PasswordPrompt } from "./components/PasswordPrompt.js";
@@ -9,8 +10,6 @@ import { DocumentEditor } from "./components/editor/DocumentEditor.js";
 import { VaultList } from "./components/VaultList.js";
 import { DocumentViewer } from "./components/viewer/DocumentViewer.js";
 import { SettingsManager } from "./components/SettingsManager.js";
-import { toast } from "./utils/Toast.js";
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 
 console.log("🚀 Mi Gestión - Sistema Iniciado (Tema Colorido)");
 
@@ -74,11 +73,32 @@ function requireEncryption(onSuccess) {
 // --- VISTAS REDISEÑADAS ---
 
 function showAuthForms(appElement) {
-  const authForms = new AuthForms(() => {
-    console.log("Login OK");
-  });
+  // --- Lógica de manejo de errores (NUEVO) ---
+  const handleError = (error) => {
+    if (error.code === "auth/user-not-found") {
+      toast.show("No encontramos una cuenta con este correo.", "error", {
+        label: "Crear cuenta nueva",
+        onClick: () => {
+          const registerTab = document.getElementById("tabRegister");
+          if (registerTab) registerTab.click();
+        },
+      });
+    } else {
+      // Usa el mensaje amigable del helper si existe, o el código
+      toast.show(error.code, "error");
+    }
+  };
 
-  // Diseño: Centrado, Glassmorphism, Colores Vibrantes
+  // Instanciamos AuthForms pasando el manejador de errores
+  const authForms = new AuthForms(
+    () => {
+      console.log("Login OK");
+    },
+    handleError // <--- Pasamos la función
+  );
+
+  // --- HTML COMPLETO RESTAURADO (CORRECCIÓN VISUAL) ---
+  // Diseño: Centrado, Glassmorphism, Colores Vibrantes, Header y Footer incluidos.
   appElement.innerHTML = `
     <div class="min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden">
       <div class="absolute inset-0 bg-gradient-to-br from-indigo-50/50 via-purple-50/50 to-pink-50/50 -z-20"></div>
@@ -108,6 +128,7 @@ function showAuthForms(appElement) {
       </div>
     </div>`;
 
+  // Inyectamos la lógica del formulario en el contenedor
   authForms.updateView(document.getElementById("authContainer"));
 }
 

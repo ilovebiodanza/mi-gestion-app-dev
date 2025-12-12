@@ -1,10 +1,10 @@
 // src/components/editor/DocumentEditor.js
 
-import { templateFormGenerator } from "../../services/templates/form-generator.js"; // Ajusta ruta si es necesario
+import { templateFormGenerator } from "../../services/templates/form-generator.js";
 import { documentService } from "../../services/documents/index.js";
 import { encryptionService } from "../../services/encryption/index.js";
-import { renderCellPreview } from "./InputRenderers.js"; // <--- IMPORTAR PREVIEW
-import { tableRowModal } from "./TableRowModal.js"; // <--- IMPORTAR MODAL
+import { renderCellPreview } from "./InputRenderers.js";
+import { tableRowModal } from "./TableRowModal.js";
 
 export class DocumentEditor {
   constructor(initialData, onSaveSuccess, onCancel) {
@@ -159,9 +159,49 @@ export class DocumentEditor {
 
     this.setupMathCalculations();
     this.setupTableInteractivity();
+
+    // --- NUEVO: Activar los toggles de contraseña en el formulario principal ---
+    this.setupPasswordToggles();
   }
 
-  // --- LÓGICA DE TABLAS (Refactorizada) ---
+  // --- LÓGICA DE CONTRASEÑAS (NUEVO) ---
+  setupPasswordToggles() {
+    const container = document.getElementById("dynamicFormContainer");
+    if (!container) return;
+
+    // Buscamos todos los botones que tengan el icono de ojo (fa-eye)
+    const toggleButtons = container.querySelectorAll(
+      "button:has(.fa-eye), .toggle-pass-cell"
+    );
+
+    toggleButtons.forEach((btn) => {
+      // Usamos onclick directo para evitar duplicación de listeners si se llama varias veces
+      btn.onclick = (e) => {
+        e.preventDefault();
+
+        // Estrategia robusta: Buscar el input dentro del mismo contenedor padre (wrapper)
+        const wrapper = btn.closest("div");
+        if (!wrapper) return;
+
+        const input = wrapper.querySelector("input");
+        const icon = btn.querySelector("i");
+
+        if (input && icon) {
+          if (input.type === "password") {
+            input.type = "text";
+            icon.className = "fas fa-eye-slash";
+            btn.classList.add("text-secondary");
+          } else {
+            input.type = "password";
+            icon.className = "fas fa-eye";
+            btn.classList.remove("text-secondary");
+          }
+        }
+      };
+    });
+  }
+
+  // --- LÓGICA DE TABLAS ---
   setupTableInteractivity() {
     const containers = document.querySelectorAll(".table-input-container");
 
@@ -173,29 +213,20 @@ export class DocumentEditor {
       const hiddenInput = container.querySelector(`#${fieldId}`); // LA FUENTE DE LA VERDAD
       const tbody = container.querySelector(".table-body");
 
-      // 1. Obtener definición de columnas
       let columnsDef = [];
       try {
         columnsDef = JSON.parse(container.nextElementSibling.textContent);
       } catch (e) {}
 
-      // 2. Función Renderizado de Tabla (Solo Lectura + Botones)
       const renderTableFromJSON = () => {
         tbody.innerHTML = "";
         let currentData = [];
         try {
-          // Intentamos parsear. Si falla (por el error de comillas), usamos array vacío
-          // para que al menos la página cargue y te deje "reparar" la tabla manualmente.
           currentData = JSON.parse(hiddenInput.value || "[]");
         } catch (e) {
-          console.error(
-            "Error parseando datos de tabla (Recuperando modo seguro):",
-            e
-          );
-          currentData = []; // Fallback a vacío para no romper la app
-
-          // Opcional: Mostrar un aviso visual en la tabla
-          tbody.innerHTML = `<tr><td colspan="100%" class="p-4 text-red-500 bg-red-50 text-xs font-bold text-center">Error cargando datos de esta tabla. Se ha reiniciado por seguridad.</td></tr>`;
+          console.error("Error parseando datos de tabla:", e);
+          currentData = [];
+          tbody.innerHTML = `<tr><td colspan="100%" class="p-4 text-red-500 bg-red-50 text-xs font-bold text-center">Error cargando datos.</td></tr>`;
           return;
         }
         if (currentData.length === 0) {
@@ -212,14 +243,13 @@ export class DocumentEditor {
 
           let tds = "";
           columnsDef.forEach((col) => {
-            // Usamos el renderCellPreview para mostrar texto bonito
             tds += `<td class="px-4 py-3 align-top border-r border-slate-50 last:border-0">${renderCellPreview(
               col,
               row[col.id]
             )}</td>`;
           });
 
-          // Columna de Acciones
+          // Acciones
           tds += `
              <td class="w-24 text-center p-0 align-middle whitespace-nowrap">
                  <div class="flex items-center justify-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -237,10 +267,8 @@ export class DocumentEditor {
         });
       };
 
-      // 3. Render Inicial
       renderTableFromJSON();
 
-      // 4. Botón Agregar (Abre Modal Vacío)
       const addBtn = container.querySelector(".add-row-btn");
       if (addBtn) {
         addBtn.className =
@@ -248,31 +276,26 @@ export class DocumentEditor {
         addBtn.innerHTML =
           '<i class="fas fa-plus-circle group-hover:scale-110 transition-transform"></i> Agregar Registro';
 
-        // --- CLICK AGREGAR ---
         addBtn.addEventListener("click", () => {
           tableRowModal.open(columnsDef, {}, null, (newRowData) => {
-            // Guardar Nuevo
             const currentData = JSON.parse(hiddenInput.value || "[]");
             currentData.push(newRowData);
             hiddenInput.value = JSON.stringify(currentData);
-            renderTableFromJSON(); // Repintar
+            renderTableFromJSON();
           });
         });
       }
 
-      // 5. Delegación de Eventos (Editar / Eliminar)
       tbody.addEventListener("click", (e) => {
-        // --- CLICK ELIMINAR ---
         const delBtn = e.target.closest(".remove-row-btn");
         if (delBtn) {
           const index = parseInt(delBtn.dataset.index);
           const currentData = JSON.parse(hiddenInput.value || "[]");
-          currentData.splice(index, 1); // Borrar
+          currentData.splice(index, 1);
           hiddenInput.value = JSON.stringify(currentData);
-          renderTableFromJSON(); // Repintar
+          renderTableFromJSON();
         }
 
-        // --- CLICK EDITAR ---
         const editBtn = e.target.closest(".edit-row-btn");
         if (editBtn) {
           const index = parseInt(editBtn.dataset.index);
@@ -284,11 +307,10 @@ export class DocumentEditor {
             rowData,
             index,
             (updatedRowData, idx) => {
-              // Guardar Edición
               const dataNow = JSON.parse(hiddenInput.value || "[]");
               dataNow[idx] = updatedRowData;
               hiddenInput.value = JSON.stringify(dataNow);
-              renderTableFromJSON(); // Repintar
+              renderTableFromJSON();
             }
           );
         }
@@ -296,91 +318,19 @@ export class DocumentEditor {
     });
   }
 
-  attachRowListeners(tr) {
-    // Math Inputs
-    tr.querySelectorAll(".math-input").forEach((input) => {
-      input.addEventListener("blur", () => this.evaluateMathInput(input));
-      input.addEventListener(
-        "keydown",
-        (e) =>
-          (e.key === "Enter" || e.key === "=") && this.evaluateMathInput(input)
-      );
-    });
-
-    // URL Inputs (Sincronización JSON)
-    tr.querySelectorAll(".url-cell-group").forEach((group) => {
-      const hidden = group.querySelector(".url-json-store");
-      const link = group.querySelector(".url-part-link");
-      const text = group.querySelector(".url-part-text");
-      const sync = () => {
-        hidden.value = JSON.stringify({
-          url: link.value.trim(),
-          text: text.value.trim(),
-        });
-        hidden.dispatchEvent(new Event("change", { bubbles: true }));
-      };
-      link.addEventListener("input", sync);
-      text.addEventListener("input", sync);
-    });
-
-    // Toggle Password
-    tr.querySelectorAll(".toggle-pass-cell").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const input = btn.previousElementSibling;
-        const icon = btn.querySelector("i");
-        if (input.type === "password") {
-          input.type = "text";
-          icon.className = "fas fa-eye-slash";
-          btn.classList.add("text-secondary");
-        } else {
-          input.type = "password";
-          icon.className = "fas fa-eye";
-          btn.classList.remove("text-secondary");
-        }
-      });
-    });
-  }
-
-  updateHiddenTableInput(tbody, columnsDef, hiddenInput) {
-    const rows = [];
-    tbody.querySelectorAll("tr").forEach((tr) => {
-      const rowObj = {};
-      tr.querySelectorAll(".cell-input").forEach((input) => {
-        const colId = input.dataset.colId;
-        const colDef = columnsDef.find((c) => c.id === colId);
-        let val;
-
-        if (colDef && colDef.type === "url") {
-          try {
-            val = JSON.parse(input.value);
-          } catch (e) {
-            val = { url: input.value, text: "" };
-          }
-        } else if (input.type === "checkbox") {
-          val = input.checked;
-        } else {
-          val = input.value;
-          if (
-            colDef &&
-            ["number", "currency", "percentage"].includes(colDef.type)
-          ) {
-            val = val === "" || isNaN(val) ? null : Number(val);
-          }
-        }
-        rowObj[colId] = val;
-      });
-      rows.push(rowObj);
-    });
-    hiddenInput.value = JSON.stringify(rows);
-  }
-
+  // --- LÓGICA DE CÁLCULOS MATEMÁTICOS ---
   setupMathCalculations() {
+    // Busca en la plantilla los campos numéricos
     this.template.fields
       .filter((f) => ["number", "currency", "percentage"].includes(f.type))
       .forEach((field) => {
         const input = document.getElementById(field.id);
         if (!input) return;
+
+        // Estilos para input numérico
         input.classList.add("font-mono", "text-right");
+
+        // Eventos para evaluar
         input.addEventListener(
           "keydown",
           (e) =>
@@ -394,12 +344,15 @@ export class DocumentEditor {
   evaluateMathInput(input) {
     const value = input.value.trim();
     if (!value) return;
+    // Regex seguro para solo permitir números y operadores
     if (/^[\d\s\.\+\-\*\/\(\)]+$/.test(value) && /[\+\-\*\/]/.test(value)) {
       try {
         const result = new Function('"use strict";return (' + value + ")")();
         if (isFinite(result)) {
-          input.value = Math.round(result * 100) / 100;
+          input.value = Math.round(result * 100) / 100; // Redondear a 2 decimales
           input.dispatchEvent(new Event("input", { bubbles: true }));
+
+          // Feedback visual de éxito
           input.classList.add("text-emerald-600", "font-bold", "bg-emerald-50");
           setTimeout(
             () =>
@@ -435,7 +388,7 @@ export class DocumentEditor {
       return;
     }
 
-    // 2. Validar Formulario
+    // 2. Validar Campos Requeridos
     const requiredInputs = document.querySelectorAll("[required]");
     let isValid = true;
     requiredInputs.forEach((input) => {
@@ -449,6 +402,7 @@ export class DocumentEditor {
       return;
     }
 
+    // 3. Verificar Encriptación
     if (!encryptionService.isReady()) {
       if (window.app && window.app.requireEncryption) {
         window.app.requireEncryption(() => this.handleSave());
@@ -462,7 +416,7 @@ export class DocumentEditor {
     );
 
     try {
-      // Evaluar matemáticas pendientes
+      // Evaluar últimas matemáticas pendientes
       document
         .querySelectorAll(".math-input")
         .forEach((inp) => this.evaluateMathInput(inp));

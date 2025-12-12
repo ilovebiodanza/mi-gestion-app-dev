@@ -48,7 +48,6 @@ export class TableRowModal {
 
     document.body.insertAdjacentHTML("beforeend", html);
 
-    // Listeners estáticos
     const close = () =>
       document.getElementById(this.modalId).classList.add("hidden");
     document.getElementById(`${this.modalId}-backdrop`).onclick = close;
@@ -62,7 +61,7 @@ export class TableRowModal {
   open(columnsDef, rowData, rowIndex, onSaveCallback) {
     this.currentColumns = columnsDef;
     this.onSave = onSaveCallback;
-    this.rowIndex = rowIndex; // null si es nuevo
+    this.rowIndex = rowIndex;
 
     const title = document.getElementById(`${this.modalId}-title`);
     title.textContent =
@@ -71,39 +70,95 @@ export class TableRowModal {
     const formContainer = document.getElementById(this.formId);
     formContainer.innerHTML = "";
 
-    // Generar formulario
     columnsDef.forEach((col) => {
       const val = rowData ? rowData[col.id] : null;
-
-      // Usamos renderCellInput (tu función existente)
-      // Pero la envolvemos en un label bonito para el modal
+      // Generamos el HTML base (que viene con estilos de tabla "invisibles")
       const inputHtml = renderCellInput(col, val);
 
       const wrapper = document.createElement("div");
       wrapper.innerHTML = `
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">${col.label}</label>
-                <div class="input-wrapper-modal">${inputHtml}</div>
+                <div class="input-wrapper-modal relative">${inputHtml}</div>
             `;
 
-      // Ajustes post-render (quitamos padding extra de celdas)
-      const inputDiv = wrapper.querySelector(".p-1"); // renderCellInput suele tener p-1
-      if (inputDiv) inputDiv.classList.remove("p-1");
+      // Limpieza de wrappers extra que trae renderCellInput
+      const innerP1 = wrapper.querySelector(".p-1");
+      if (innerP1) {
+        // Extraemos el contenido del p-1 para evitar padding doble
+        const content = innerP1.innerHTML;
+        innerP1.outerHTML = content;
+      }
 
       formContainer.appendChild(wrapper);
     });
 
-    // Activar lógica JS de los inputs (toggle password, sync urls, math)
-    // Reutilizamos la lógica que ya tenías o creamos una mini versión aquí
+    // 1. TRANSFORMACIÓN VISUAL: De "Tabla" a "Formulario"
+    this.transformInputsToModalStyle(formContainer);
+
+    // 2. ACTIVAR FUNCIONALIDAD
     this.attachListeners(formContainer);
 
     document.getElementById(this.modalId).classList.remove("hidden");
+  }
+
+  /**
+   * Esta función es la CLAVE. Busca los inputs "invisibles" de la tabla
+   * y les aplica las clases de formulario estándar (bordes, fondo, etc.)
+   */
+  transformInputsToModalStyle(container) {
+    const inputs = container.querySelectorAll("input, select, textarea");
+
+    inputs.forEach((input) => {
+      // Quitamos clases de "Tabla transparente"
+      input.classList.remove(
+        "bg-transparent",
+        "border-0",
+        "focus:ring-0",
+        "text-right"
+      );
+
+      // Agregamos clases de "Formulario Modal" (Igual que en AuthForms o Editor Principal)
+      input.classList.add(
+        "w-full",
+        "bg-slate-50",
+        "border",
+        "border-slate-200",
+        "rounded-xl",
+        "focus:bg-white",
+        "focus:ring-2",
+        "focus:ring-primary/50",
+        "focus:border-primary",
+        "transition-all",
+        "px-4",
+        "py-3" // Más padding para que se vea bien en el modal
+      );
+
+      // Ajustes específicos
+      if (input.tagName === "TEXTAREA") {
+        input.classList.add("min-h-[100px]"); // Forzar altura en modal
+      }
+
+      // Si es numérico/matemático, alineamos a la izquierda en el modal (o derecha si prefieres)
+      // pero quitamos 'text-right' forzado de la tabla para que se vea más natural en form móvil
+      if (input.classList.contains("math-input")) {
+        // Opcional: input.classList.add('text-right');
+      }
+    });
+
+    // Arreglo especial para el grupo URL (que tiene estructura compleja)
+    container.querySelectorAll(".url-cell-group").forEach((group) => {
+      group.classList.remove("p-1");
+      group.classList.add("space-y-3");
+      group
+        .querySelectorAll(".border-none")
+        .forEach((i) => i.classList.remove("border-none"));
+    });
   }
 
   handleSave() {
     const formContainer = document.getElementById(this.formId);
     const rowObj = {};
 
-    // Recolectar datos (Lógica similar a updateHiddenTableInput)
     formContainer.querySelectorAll(".cell-input").forEach((input) => {
       const colId = input.dataset.colId;
       const colDef = this.currentColumns.find((c) => c.id === colId);
@@ -123,7 +178,13 @@ export class TableRowModal {
           colDef &&
           ["number", "currency", "percentage"].includes(colDef.type)
         ) {
-          val = val === "" || isNaN(val) ? null : Number(val);
+          // Evaluar matemáticas antes de guardar por si acaso
+          if (input.classList.contains("math-input"))
+            this.evaluateMathInput(input);
+          val =
+            input.value === "" || isNaN(input.value)
+              ? null
+              : Number(input.value);
         }
       }
       rowObj[colId] = val;
@@ -134,22 +195,30 @@ export class TableRowModal {
   }
 
   attachListeners(container) {
-    // Toggle Passwords
+    // 1. Toggle Passwords
     container.querySelectorAll(".toggle-pass-cell").forEach((btn) => {
-      btn.onclick = () => {
-        const input = btn.previousElementSibling;
+      // Ajuste visual del botón en el modal (estaba flotando raro)
+      btn.classList.add("absolute", "right-3", "top-3", "z-10");
+
+      btn.onclick = (e) => {
+        e.preventDefault();
+        const wrapper = btn.closest(".input-wrapper-modal");
+        const input = wrapper.querySelector("input");
         const icon = btn.querySelector("i");
+
         if (input.type === "password") {
           input.type = "text";
           icon.className = "fas fa-eye-slash";
+          btn.classList.add("text-secondary");
         } else {
           input.type = "password";
           icon.className = "fas fa-eye";
+          btn.classList.remove("text-secondary");
         }
       };
     });
 
-    // Sync URLs
+    // 2. Sync URLs
     container.querySelectorAll(".url-cell-group").forEach((group) => {
       const hidden = group.querySelector(".url-json-store");
       const link = group.querySelector(".url-part-link");
@@ -163,6 +232,40 @@ export class TableRowModal {
       link.oninput = sync;
       text.oninput = sync;
     });
+
+    // 3. Math Inputs
+    container.querySelectorAll(".math-input").forEach((input) => {
+      const handleMath = () => this.evaluateMathInput(input);
+
+      input.addEventListener("blur", handleMath);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === "=") {
+          e.preventDefault();
+          handleMath();
+        }
+      });
+    });
+  }
+
+  evaluateMathInput(input) {
+    const value = input.value.trim();
+    if (!value) return;
+    if (/^[\d\s\.\+\-\*\/\(\)]+$/.test(value) && /[\+\-\*\/]/.test(value)) {
+      try {
+        const result = new Function('"use strict";return (' + value + ")")();
+        if (isFinite(result)) {
+          input.value = Math.round(result * 100) / 100;
+          // Efecto visual en el modal
+          const oldBorder = input.style.borderColor;
+          input.style.borderColor = "#10b981"; // Emerald
+          input.style.backgroundColor = "#ecfdf5"; // Emerald-50
+          setTimeout(() => {
+            input.style.borderColor = oldBorder;
+            input.style.backgroundColor = "";
+          }, 800);
+        }
+      } catch (e) {}
+    }
   }
 }
 
