@@ -10,6 +10,8 @@ import { DocumentEditor } from "./components/editor/DocumentEditor.js";
 import { VaultList } from "./components/VaultList.js";
 import { DocumentViewer } from "./components/viewer/DocumentViewer.js";
 import { SettingsManager } from "./components/SettingsManager.js";
+// 👇 IMPORTANTE: Agregar este servicio
+import { documentService } from "./services/documents/index.js";
 
 console.log("🚀 Mi Gestión - Sistema Iniciado (Tema Colorido)");
 
@@ -42,7 +44,7 @@ async function handleAuthStateChange(user, appElement) {
   }
 }
 
-// --- SEGURIDAD ---
+// --- SEGURIDAD MEJORADA ---
 
 function requireEncryption(onSuccess) {
   const user = authService.getCurrentUser();
@@ -55,14 +57,32 @@ function requireEncryption(onSuccess) {
 
   const prompt = new PasswordPrompt(async (password) => {
     try {
+      // 1. Derivar la llave (Esto siempre funciona, sea correcta o no)
       await authService.initializeEncryption(password);
+
+      // 2. PRUEBA DEL CANARIO (Nueva Lógica)
+      // Intentamos descifrar un documento real para validar la contraseña AHORA.
+      const docs = await documentService.getAllDocuments();
+
+      if (docs.length > 0) {
+        // Tomamos el primer documento disponible y tratamos de abrirlo
+        // Si la clave es errónea, esto lanzará el error "Contraseña incorrecta..." aquí mismo.
+        await encryptionService.decryptDocument(docs[0].encryptedContent);
+      }
+
+      // 3. Si llegamos aquí, la contraseña es correcta (o no hay datos que validar)
       if (encryptionService.isReady()) {
         onSuccess();
-        return true;
+        return true; // Éxito -> Cierra el modal
       }
       return false;
     } catch (error) {
-      console.error("Error cifrado:", error);
+      console.error("❌ Validación de contraseña fallida:", error);
+
+      // Importante: Bloquear el servicio nuevamente para limpiar la llave incorrecta
+      if (encryptionService.lock) encryptionService.lock();
+
+      // Retornar false dispara el Toast de error en PasswordPrompt.js
       return false;
     }
   }, user.email);
@@ -73,32 +93,25 @@ function requireEncryption(onSuccess) {
 // --- VISTAS REDISEÑADAS ---
 
 function showAuthForms(appElement) {
-  // --- Lógica de manejo de errores (NUEVO) ---
   const handleError = (error) => {
-    if (error.code === "auth/user-not-found") {
-      toast.show("No encontramos una cuenta con este correo.", "error", {
-        label: "Crear cuenta nueva",
-        onClick: () => {
-          const registerTab = document.getElementById("tabRegister");
-          if (registerTab) registerTab.click();
-        },
-      });
+    console.error("Error capturado en UI:", error); // Log para debug
+
+    if (
+      error.code === "auth/user-not-found" ||
+      error.code === "auth/invalid-credential"
+    ) {
+      toast.show("Correo o contraseña incorrectos.", "error");
     } else {
-      // Usa el mensaje amigable del helper si existe, o el código
-      toast.show(error.code, "error");
+      // Si tiene .code (Firebase) úsalo, si no, usa .message (JS nativo)
+      const msg = error.code || error.message || "Error del sistema";
+      toast.show(msg, "error");
     }
   };
 
-  // Instanciamos AuthForms pasando el manejador de errores
-  const authForms = new AuthForms(
-    () => {
-      console.log("Login OK");
-    },
-    handleError // <--- Pasamos la función
-  );
+  const authForms = new AuthForms(() => {
+    console.log("Login OK");
+  }, handleError);
 
-  // --- HTML COMPLETO RESTAURADO (CORRECCIÓN VISUAL) ---
-  // Diseño: Centrado, Glassmorphism, Colores Vibrantes, Header y Footer incluidos.
   appElement.innerHTML = `
     <div class="min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden">
       <div class="absolute inset-0 bg-gradient-to-br from-indigo-50/50 via-purple-50/50 to-pink-50/50 -z-20"></div>
@@ -128,12 +141,10 @@ function showAuthForms(appElement) {
       </div>
     </div>`;
 
-  // Inyectamos la lógica del formulario en el contenedor
   authForms.updateView(document.getElementById("authContainer"));
 }
 
 async function showDashboard(user, appElement) {
-  // Navbar Flotante (Glass) y Layout limpio
   appElement.innerHTML = `
     <div class="min-h-screen flex flex-col">
       <nav class="sticky top-0 z-50 w-full glass-nav border-b border-white/40 bg-white/80 backdrop-blur-md">
@@ -238,7 +249,6 @@ function showVaultListView(user) {
 
 function showDocumentDetails(docId, user) {
   const mainContainer = document.getElementById("dynamicContent");
-  // Skeleton Loader Mejorado
   mainContainer.innerHTML = `
     <div id="documentViewerPlaceholder" class="max-w-5xl mx-auto glass rounded-2xl p-8">
         <div class="animate-pulse flex space-x-6">
@@ -258,7 +268,6 @@ function showDocumentDetails(docId, user) {
     else showVaultListView(user);
   });
 
-  // Reemplazo del placeholder
   const placeholder = document.getElementById("documentViewerPlaceholder");
   if (placeholder) placeholder.outerHTML = viewer.render();
 

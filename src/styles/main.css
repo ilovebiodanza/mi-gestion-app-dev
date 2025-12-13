@@ -58,3 +58,12 @@
     print-color-adjust: exact !important;
   }
 }
+
+/* --- Seguridad: Máscara para inputs de texto --- */
+/* Esto hace que un input type="text" se vea como password */
+.security-mask {
+  -webkit-text-security: disc;
+  text-security: disc;
+  font-family: monospace; /* Ayuda a que los puntos se vean uniformes */
+  letter-spacing: 2px;
+}

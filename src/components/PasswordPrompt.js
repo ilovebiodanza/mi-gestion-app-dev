@@ -1,3 +1,6 @@
+// src/components/PasswordPrompt.js
+import { toast } from "./Toast.js";
+
 export class PasswordPrompt {
   constructor(onSubmit, email) {
     this.onSubmit = onSubmit;
@@ -30,13 +33,10 @@ export class PasswordPrompt {
 
           <form id="promptForm" class="space-y-4">
             <div class="relative">
-               <input type="password" id="promptPassword" required autofocus
-                class="w-full px-4 py-3 text-center text-lg tracking-widest bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none placeholder-slate-300"
+               <input type="text" id="promptPassword" required autofocus
+                autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                class="security-mask w-full px-4 py-3 text-center text-lg bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none placeholder-slate-300"
                 placeholder="Contraseña Maestra">
-            </div>
-
-            <div id="promptError" class="hidden text-center text-xs font-bold text-red-500 bg-red-50 p-2 rounded-lg border border-red-100">
-              Contraseña incorrecta
             </div>
 
             <div class="flex gap-3 mt-6">
@@ -58,7 +58,6 @@ export class PasswordPrompt {
     const input = this.modalElement.querySelector("#promptPassword");
     const cancelBtn = this.modalElement.querySelector("#btnCancel");
     const unlockBtn = this.modalElement.querySelector("#btnUnlock");
-    const errorDiv = this.modalElement.querySelector("#promptError");
 
     input.focus();
 
@@ -72,7 +71,6 @@ export class PasswordPrompt {
       unlockBtn.disabled = true;
       unlockBtn.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i>`;
       input.disabled = true;
-      errorDiv.classList.add("hidden");
 
       const success = await this.onSubmit(password);
 
@@ -83,9 +81,10 @@ export class PasswordPrompt {
         unlockBtn.innerHTML = `<i class="fas fa-check"></i>`;
         setTimeout(() => this.close(), 500);
       } else {
-        // Error
-        errorDiv.classList.remove("hidden");
-        errorDiv.classList.add("animate-pulse");
+        // Error: Usamos Toast
+        toast.show("Contraseña incorrecta. Inténtalo de nuevo.", "error");
+
+        // Restaurar estado del formulario
         input.value = "";
         input.disabled = false;
         input.focus();
@@ -97,7 +96,6 @@ export class PasswordPrompt {
 
   close() {
     if (this.modalElement) {
-      // Animación de salida opcional
       this.modalElement.style.opacity = "0";
       setTimeout(() => {
         this.modalElement.remove();

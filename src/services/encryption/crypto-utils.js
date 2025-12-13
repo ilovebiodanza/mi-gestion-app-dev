@@ -4,9 +4,9 @@
 const ALGORITHM_NAME = "AES-GCM";
 const KDF_NAME = "PBKDF2";
 const HASH_NAME = "SHA-256";
-const ITERATIONS = 100000; // Estándar de seguridad alto
+const ITERATIONS = 100000;
 const SALT_SIZE = 16;
-const IV_SIZE = 12; // Estándar para AES-GCM
+const IV_SIZE = 12;
 
 /**
  * Genera un Salt aleatorio criptográficamente seguro
@@ -41,11 +41,30 @@ function hex2buf(hexString) {
 }
 
 /**
- * Deriva una Llave Maestra (AES-GCM) a partir de un password y un salt (uid)
- * Usamos el UID del usuario como Salt para asegurar unicidad por usuario.
+ * IMPORTAR LLAVE (Helper Interno Crítico)
+ * Convierte una llave cruda (Uint8Array) a un objeto CryptoKey utilizable.
+ */
+async function importKeyIfNeeded(key) {
+  // Si ya es CryptoKey, la devolvemos tal cual
+  if (key instanceof CryptoKey) return key;
+
+  // Si es bytes (Uint8Array), la importamos para AES-GCM
+  return await window.crypto.subtle.importKey(
+    "raw",
+    key,
+    { name: ALGORITHM_NAME },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+/**
+ * Deriva una Llave Maestra (AES-GCM) a partir de un password y un salt.
+ * Retorna CryptoKey (Objeto).
+ * NOTA: Esta función se mantiene por compatibilidad, pero key-derivation.js
+ * es la que se usa principalmente ahora.
  */
 export async function deriveMasterKey(password, saltString) {
-  // 1. Importar la contraseña como "Key Material"
   const passwordBuffer = str2ab(password);
   const keyMaterial = await window.crypto.subtle.importKey(
     "raw",
@@ -55,12 +74,10 @@ export async function deriveMasterKey(password, saltString) {
     ["deriveBits", "deriveKey"]
   );
 
-  // 2. Usar el UID (o saltString) para salar la clave
-  // Nota: En producción ideal, el salt debería ser aleatorio y guardado,
-  // pero para V1 usar el UID es una estrategia determinista válida.
-  const saltBuffer = str2ab(saltString);
+  // Soporte para salt como string o buffer
+  const saltBuffer =
+    typeof saltString === "string" ? str2ab(saltString) : saltString;
 
-  // 3. Derivar la llave AES-GCM real
   return await window.crypto.subtle.deriveKey(
     {
       name: KDF_NAME,
@@ -70,32 +87,34 @@ export async function deriveMasterKey(password, saltString) {
     },
     keyMaterial,
     { name: ALGORITHM_NAME, length: 256 },
-    false, // La llave no es exportable (Seguridad: vive solo en RAM)
+    false,
     ["encrypt", "decrypt"]
   );
 }
 
 /**
  * Cifra un objeto o texto usando la Llave Maestra
- * Devuelve un string JSON con formato: { iv: "hex...", data: "hex..." }
  */
 export async function encryptData(data, masterKey) {
   try {
-    // 1. Preparar datos
+    // 1. Asegurar que tenemos una CryptoKey válida
+    const cryptoKey = await importKeyIfNeeded(masterKey);
+
+    // 2. Preparar datos
     const jsonStr = JSON.stringify(data);
     const dataBuffer = str2ab(jsonStr);
 
-    // 2. Generar Vector de Inicialización (IV) aleatorio por cada encriptación
+    // 3. Generar IV
     const iv = window.crypto.getRandomValues(new Uint8Array(IV_SIZE));
 
-    // 3. Cifrar
+    // 4. Cifrar
     const encryptedBuffer = await window.crypto.subtle.encrypt(
       { name: ALGORITHM_NAME, iv: iv },
-      masterKey,
+      cryptoKey, // Usamos la llave importada
       dataBuffer
     );
 
-    // 4. Empaquetar para guardar (Hexadecimal)
+    // 5. Retornar paquete
     return {
       iv: buf2hex(iv),
       content: buf2hex(encryptedBuffer),
@@ -111,29 +130,30 @@ export async function encryptData(data, masterKey) {
  */
 export async function decryptData(encryptedPackage, masterKey) {
   try {
-    // Validar formato
     if (
       !encryptedPackage ||
       !encryptedPackage.iv ||
       !encryptedPackage.content
     ) {
-      // Si no tiene formato cifrado, a lo mejor es dato legacy o plano
-      console.warn("Intentando leer datos sin formato de cifrado válido.");
+      console.warn("Datos sin formato cifrado válido.");
       return encryptedPackage;
     }
 
-    // 1. Recuperar buffers
+    // 1. Asegurar que tenemos una CryptoKey válida
+    const cryptoKey = await importKeyIfNeeded(masterKey);
+
+    // 2. Recuperar buffers
     const iv = hex2buf(encryptedPackage.iv);
     const content = hex2buf(encryptedPackage.content);
 
-    // 2. Descifrar
+    // 3. Descifrar
     const decryptedBuffer = await window.crypto.subtle.decrypt(
       { name: ALGORITHM_NAME, iv: iv },
-      masterKey,
+      cryptoKey, // Usamos la llave importada
       content
     );
 
-    // 3. Decodificar a objeto
+    // 4. Decodificar
     const decodedStr = new TextDecoder().decode(decryptedBuffer);
     return JSON.parse(decodedStr);
   } catch (e) {

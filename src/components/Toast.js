@@ -1,88 +1,127 @@
-// Toast.js
-import { getFriendlyErrorMessage } from "../utils//authErrors.js";
+// src/components/Toast.js
 
 export class ToastManager {
   constructor() {
     this.container = document.createElement("div");
-    // Agregamos pointer-events-none al contenedor para que no bloquee clicks en el resto de la web
-    // pero pointer-events-auto a los hijos para permitir clicks en el Toast.
+    // Posición fija en la esquina superior derecha, sin bloquear clics en el resto de la página
     this.container.className =
-      "fixed top-5 right-5 z-50 flex flex-col gap-3 pointer-events-none";
+      "fixed top-4 right-4 z-[9999] flex flex-col gap-3 pointer-events-none";
     document.body.appendChild(this.container);
   }
 
   /**
-   * @param {string} codeOrMessage - Código de error o mensaje
-   * @param {string} type - 'error' | 'success' | 'info'
-   * @param {Object|null} action - Opcional: { label: 'Texto', onClick: () => void }
+   * Muestra una notificación toast
+   * @param {string|object} content - El mensaje de texto o un objeto de error
+   * @param {string} type - 'success', 'error', 'info', 'warning'
+   * @param {object} options - { duration: 3000, label: "Botón", onClick: fn }
    */
-  show(codeOrMessage, type = "error", action = null) {
-    const message = codeOrMessage.startsWith("auth/")
-      ? getFriendlyErrorMessage(codeOrMessage)
-      : codeOrMessage;
+  show(content, type = "info", options = {}) {
+    // --- 1. Sanitización del Mensaje (FIX del error ReferenceError) ---
+    let messageText = "";
 
+    if (typeof content === "string") {
+      messageText = content;
+    } else if (content && typeof content === "object") {
+      // Si recibimos un objeto (ej: Error de Firebase), extraemos lo útil
+      messageText =
+        content.message || content.code || "Ocurrió un error desconocido";
+      console.warn("⚠️ Toast recibió un objeto. Mostrando:", messageText);
+    } else {
+      messageText = "Notificación del sistema";
+    }
+
+    // --- 2. Configuración Visual ---
     const styles = {
-      error: "bg-red-50 border-l-4 border-red-500 text-red-700",
-      success: "bg-green-50 border-l-4 border-green-500 text-green-700",
-      info: "bg-blue-50 border-l-4 border-blue-500 text-blue-700",
+      success: "bg-emerald-50 border-emerald-200 text-emerald-800",
+      error: "bg-red-50 border-red-200 text-red-800",
+      info: "bg-blue-50 border-blue-200 text-blue-800",
+      warning: "bg-amber-50 border-amber-200 text-amber-800",
     };
 
-    const toast = document.createElement("div");
-    // pointer-events-auto es vital aquí para poder clickear el enlace
-    toast.className = `${styles[type]} shadow-lg rounded-md p-4 flex flex-col gap-2 transform transition-all duration-300 translate-x-full opacity-0 pointer-events-auto min-w-[300px] max-w-md`;
+    const icons = {
+      success: '<i class="fas fa-check-circle text-emerald-500 text-xl"></i>',
+      error: '<i class="fas fa-exclamation-circle text-red-500 text-xl"></i>',
+      info: '<i class="fas fa-info-circle text-blue-500 text-xl"></i>',
+      warning:
+        '<i class="fas fa-exclamation-triangle text-amber-500 text-xl"></i>',
+    };
 
-    // HTML Base
-    let htmlContent = `
-      <div class="flex items-center justify-between">
-        <span class="font-medium text-sm flex-1 mr-2">${message}</span>
-        <button class="text-opacity-50 hover:text-opacity-100 focus:outline-none font-bold text-lg leading-none" data-close>
-          &times;
-        </button>
-      </div>
+    // --- 3. Crear el Elemento DOM ---
+    const toastEl = document.createElement("div");
+    // Clases base + animación + estilo específico
+    toastEl.className = `
+      ${styles[type] || styles.info} 
+      border shadow-lg rounded-xl p-4 pr-10 min-w-[300px] max-w-md 
+      flex items-start gap-4 pointer-events-auto 
+      transform transition-all duration-300 translate-x-full opacity-0
     `;
 
-    // Si hay una acción, agregamos el botón/enlace debajo del mensaje
-    if (action) {
-      htmlContent += `
-        <div class="flex justify-end mt-1">
-          <button id="toast-action-btn" class="text-xs font-bold uppercase tracking-wide underline hover:no-underline focus:outline-none transition-colors">
-            ${action.label} &rarr;
-          </button>
-        </div>
+    // Contenido HTML interno
+    let actionHtml = "";
+    if (options.label && options.onClick) {
+      actionHtml = `
+        <button class="mt-2 text-xs font-bold uppercase tracking-wider underline hover:opacity-80 transition-opacity js-toast-action">
+          ${options.label}
+        </button>
       `;
     }
 
-    toast.innerHTML = htmlContent;
-    this.container.appendChild(toast);
+    toastEl.innerHTML = `
+      <div class="flex-shrink-0 mt-0.5">${icons[type] || icons.info}</div>
+      <div class="flex-1">
+        <p class="text-sm font-medium leading-relaxed">${messageText}</p>
+        ${actionHtml}
+      </div>
+      <button class="absolute top-2 right-2 p-2 rounded-full hover:bg-black/5 transition-colors text-current opacity-50 hover:opacity-100 js-toast-close">
+        <i class="fas fa-times text-xs"></i>
+      </button>
+    `;
 
-    // Event Listeners
-    toast
-      .querySelector("[data-close]")
-      .addEventListener("click", () => this.remove(toast));
+    // --- 4. Eventos ---
 
-    if (action) {
-      const actionBtn = toast.querySelector("#toast-action-btn");
-      actionBtn.addEventListener("click", () => {
-        action.onClick();
-        this.remove(toast);
-      });
+    // Botón de acción (si existe)
+    if (options.label && options.onClick) {
+      const actionBtn = toastEl.querySelector(".js-toast-action");
+      if (actionBtn) {
+        actionBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          options.onClick();
+          this.dismiss(toastEl);
+        });
+      }
     }
 
-    // Animación de entrada
-    requestAnimationFrame(() => {
-      toast.classList.remove("translate-x-full", "opacity-0");
-    });
+    // Botón cerrar (X)
+    const closeBtn = toastEl.querySelector(".js-toast-close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => this.dismiss(toastEl));
+    }
 
-    // Auto-eliminar: Si hay acción, damos más tiempo (8s), si no, lo normal (4s)
-    const duration = action ? 8000 : 4000;
-    setTimeout(() => this.remove(toast), duration);
+    // Auto-cierre
+    const duration = options.duration || 4000;
+    if (duration > 0) {
+      setTimeout(() => {
+        // Solo cerrar si sigue en el DOM
+        if (toastEl.isConnected) this.dismiss(toastEl);
+      }, duration);
+    }
+
+    // --- 5. Mostrar en pantalla (Animación de entrada) ---
+    this.container.appendChild(toastEl);
+
+    // Pequeño delay para permitir que el navegador renderice antes de animar
+    requestAnimationFrame(() => {
+      toastEl.classList.remove("translate-x-full", "opacity-0");
+    });
   }
 
-  remove(element) {
-    if (!element) return;
+  dismiss(element) {
+    // Animación de salida
     element.classList.add("translate-x-full", "opacity-0");
-    element.addEventListener("transitionend", () => element.remove(), {
-      once: true,
+
+    // Eliminar del DOM después de la transición CSS
+    element.addEventListener("transitionend", () => {
+      if (element.isConnected) element.remove();
     });
   }
 }

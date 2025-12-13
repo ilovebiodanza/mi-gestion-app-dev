@@ -1,96 +1,82 @@
 // src/services/encryption/index.js
-import { deriveMasterKey, encryptData, decryptData } from "./crypto-utils.js";
+import { encryptData, decryptData } from "./crypto-utils.js";
+import { deriveMasterKey, verifyPassword } from "./key-derivation.js"; // <--- Ajuste aquí
 
 class EncryptionService {
   constructor() {
-    this.key = null; // Unificado: Antes era masterKey
+    this.key = null;
     this.userId = null;
-    this.isUnlocked = false; // Nueva bandera de estado
+    this.isUnlocked = false;
+    this.lockTimer = null;
+    this.GRACE_PERIOD_MS = 2 * 60 * 60 * 1000; // 2 Horas
   }
 
-  async initialize(password, uid) {
+  _resetTimer() {
+    if (this.lockTimer) clearTimeout(this.lockTimer);
+    this.lockTimer = setTimeout(() => {
+      console.warn("⏳ Tiempo de gracia expirado.");
+      this.lock();
+      window.location.reload();
+    }, this.GRACE_PERIOD_MS);
+  }
+
+  // ACEPTA VERIFIER
+  async initialize(password, salt, uid, verifier = null) {
     try {
       this.userId = uid;
 
-      // 1. Derivamos la llave
-      const derivedKey = await deriveMasterKey(password, uid);
+      // 1. SI HAY VERIFICADOR, COMPROBAMOS LA CONTRASEÑA ANTES DE SEGUIR
+      if (verifier) {
+        const isValid = await verifyPassword(password, salt, verifier);
+        if (!isValid) {
+          console.error("🚫 Contraseña de bóveda incorrecta.");
+          throw new Error("Contraseña incorrecta");
+        }
+      }
 
-      // 2. LA GUARDAMOS EN LA VARIABLE CORRECTA (this.key)
+      // 2. Si es válida (o no hay verificador), derivamos y abrimos
+      const derivedKey = await deriveMasterKey(password, salt);
       this.key = derivedKey;
-
-      // 3. ¡IMPORTANTE! ACTIVAMOS LA BANDERA DE DESBLOQUEO
-      // Esto permite que 'decryptDocument' funcione inmediatamente después para la verificación
       this.isUnlocked = true;
 
-      console.log("🔓 Bóveda desbloqueada en memoria (Flag activa).");
+      this._resetTimer();
+      console.log("🔓 Bóveda desbloqueada y verificada.");
       return true;
     } catch (error) {
-      console.error("Error inicializando cifrado:", error);
-      this.lock(); // Si falla algo aquí, limpiamos todo por seguridad
-      throw error;
+      this.lock();
+      throw error; // Esto hará que el PasswordPrompt muestre el error rojo
     }
   }
 
-  // Limpieza total de seguridad
   lock() {
     console.log("🔒 Bloqueando bóveda (Limpieza de memoria)...");
-    this.key = null;
-    this.isUnlocked = false;
+    this.key = null; // <--- La llave se borra (se vuelve null)
+    this.isUnlocked = false; // <--- La bandera se baja
     this.userId = null;
+    if (this.lockTimer) clearTimeout(this.lockTimer); // Detenemos el reloj
   }
 
-  // Verificación de estado
   isReady() {
-    // Ahora verifica la variable correcta 'this.key'
     return this.isUnlocked === true && this.key !== null;
   }
 
   async decryptDocument(encryptedData) {
-    // 1. Validación de seguridad previa
-    if (!this.isReady()) {
-      throw new Error("La bóveda está bloqueada. Se requiere contraseña.");
-    }
+    if (!this.isReady()) throw new Error("Bóveda bloqueada");
+    this._resetTimer();
+    return await decryptData(encryptedData, this.key);
+  }
 
+  async encryptDocument(data) {
+    if (!this.isReady()) throw new Error("Bóveda bloqueada");
+    this._resetTimer();
+    return await encryptData(data, this.key);
+  }
+
+  async validateKey(password, salt) {
+    // Método auxiliar para verificaciones sin estado
+    // Nota: Si tienes verifier es mejor usar verifyPassword directamente
     try {
-      // 2. Intentar desencriptar usando la variable correcta 'this.key'
-      const decrypted = await decryptData(encryptedData, this.key);
-      return decrypted;
-    } catch (error) {
-      console.error(
-        "❌ Fallo de desencriptado (Posible clave errónea):",
-        error
-      );
-
-      // 3. AUTO-BLOQUEO: Si la llave no sirve, la matamos.
-      this.lock();
-
-      throw new Error("Contraseña incorrecta o datos corruptos.");
-    }
-  }
-
-  async encryptDocument(data, specificKey = null) {
-    const keyToUse = specificKey || this.key;
-    if (!keyToUse) throw new Error("Bóveda cerrada (Encrypt).");
-    return await encryptData(data, keyToUse);
-  }
-
-  // --- Funciones auxiliares (Re-cifrado, etc.) ---
-
-  async deriveTemporaryKey(password) {
-    if (!this.userId) throw new Error("Usuario no identificado");
-    return await deriveMasterKey(password, this.userId);
-  }
-
-  setNewMasterKey(newKey) {
-    this.key = newKey; // Unificado a this.key
-    this.isUnlocked = true; // Aseguramos que quede abierta
-    console.log("🔑 Llave maestra actualizada en memoria.");
-  }
-
-  async validateKey(password) {
-    if (!this.userId) return false;
-    try {
-      await deriveMasterKey(password, this.userId);
+      await deriveMasterKey(password, salt);
       return true;
     } catch (e) {
       return false;
