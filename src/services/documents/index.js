@@ -41,8 +41,6 @@ class DocumentService {
     console.log("🔒 Creando documento...");
     const { title, data, template, tags } = payload;
 
-    console.log({ payload });
-
     const metadata = {
       title: title || "Sin Título",
       templateName: template.name,

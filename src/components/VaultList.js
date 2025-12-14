@@ -1,5 +1,5 @@
 // src/components/VaultList.js
-import { documentService } from "../services/documents/index.js"; // <--- ESTA IMPORTACIÓN FALTABA
+import { documentService } from "../services/documents/index.js";
 import { authService } from "../services/auth.js";
 import { VaultSetupModal } from "./VaultSetupModal.js";
 import { encryptionService } from "../services/encryption/index.js";
@@ -8,27 +8,22 @@ export class VaultList {
   constructor(onViewDocument, onNewDocument) {
     this.onViewDocument = onViewDocument;
 
+    // Estado interno para filtros
+    this.documents = [];
+    this.activeFilter = "all"; // 'all' | 'Nombre de Plantilla'
+
     // --- LÓGICA INTERCEPTADA (Setup Inicial) ---
     this.onNewDocument = async () => {
       try {
-        // 1. Verificamos si ya configuró la bóveda
         const isConfigured = await authService.isVaultConfigured();
 
         if (!isConfigured) {
-          // CASO A: Usuario Nuevo -> Setup Modal
-          const setupModal = new VaultSetupModal(() => {
-            // Al terminar setup, procedemos a crear el documento
-            onNewDocument();
-          });
+          const setupModal = new VaultSetupModal(() => onNewDocument());
           setupModal.show();
         } else {
-          // CASO B: Usuario Configurado -> Verificar Bloqueo normal
           if (window.app && window.app.requireEncryption) {
-            window.app.requireEncryption(() => {
-              onNewDocument();
-            });
+            window.app.requireEncryption(() => onNewDocument());
           } else {
-            // Fallback
             if (!encryptionService.isReady()) {
               window.app.requireEncryption(() => onNewDocument());
             } else {
@@ -38,18 +33,9 @@ export class VaultList {
         }
       } catch (error) {
         console.error("Error al verificar estado de bóveda:", error);
-        // En caso de error, intentamos flujo normal por seguridad
         onNewDocument();
       }
     };
-  }
-
-  // --- Helper de Seguridad XSS ---
-  createElement(tag, classes = [], textContent = "") {
-    const el = document.createElement(tag);
-    if (classes.length) el.classList.add(...classes);
-    if (textContent) el.textContent = textContent;
-    return el;
   }
 
   async loadDocuments() {
@@ -78,30 +64,184 @@ export class VaultList {
       </div>`;
 
     try {
-      // Llamamos al servicio real
-      const documents = await documentService.listDocuments();
-      this.render(container, documents);
+      // 1. Cargar datos
+      this.documents = await documentService.listDocuments();
+
+      // 2. Preparar Layout (Contenedor de Filtros + Contenedor de Grid)
+      container.innerHTML = `
+        <div id="vaultFiltersContainer" class="mb-8 flex flex-wrap items-center gap-2 animate-fade-in"></div>
+        <div id="vaultGridContainer" class="animate-fade-in-up"></div>
+      `;
+
+      // 3. Renderizar componentes
+      this.renderFilters();
+      this.renderGrid();
     } catch (error) {
       console.error("Error cargando bóveda:", error);
-      container.innerHTML = `
-        <div class="text-center py-12 bg-red-50 rounded-2xl border border-red-100">
-          <div class="inline-flex bg-red-100 p-3 rounded-full text-red-500 mb-3"><i class="fas fa-exclamation-triangle"></i></div>
-          <p class="text-red-600 font-medium">No se pudieron cargar los documentos.</p>
-          <button id="retryBtn" class="mt-4 text-sm text-red-700 underline hover:text-red-900">Reintentar</button>
-        </div>`;
-
-      document
-        .getElementById("retryBtn")
-        ?.addEventListener("click", () => this.loadDocuments());
+      this.renderErrorState(container);
     }
   }
 
-  render(container, documents) {
-    container.innerHTML = "";
+  /**
+   * Genera los botones de filtrado basados en las plantillas existentes
+   */
+  renderFilters() {
+    const filterContainer = document.getElementById("vaultFiltersContainer");
+    if (!filterContainer) return;
 
-    // Estado vacío
-    if (documents.length === 0) {
-      container.innerHTML = `
+    if (this.documents.length === 0) {
+      filterContainer.innerHTML = "";
+      return;
+    }
+
+    // 1. Calcular estadísticas (agrupar por nombre de plantilla)
+    const stats = this.documents.reduce((acc, doc) => {
+      const name = doc.templateName || "Sin Plantilla";
+      acc[name] = (acc[name] || 0) + 1;
+      return acc;
+    }, {});
+
+    // 2. Ordenar alfabéticamente
+    const templateNames = Object.keys(stats).sort((a, b) => a.localeCompare(b));
+
+    // 3. Construir lista de filtros
+    const filters = [
+      { id: "all", label: "Todos", count: this.documents.length },
+      ...templateNames.map((name) => ({
+        id: name,
+        label: name,
+        count: stats[name],
+      })),
+    ];
+
+    // 4. Renderizar botones
+    filterContainer.innerHTML = filters
+      .map((f) => {
+        const isActive = this.activeFilter === f.id;
+        // Estilos: Activo (Oscuro/Brand) vs Inactivo (Blanco/Gris)
+        const btnClass = isActive
+          ? "bg-slate-800 text-white shadow-lg shadow-slate-500/30 ring-2 ring-slate-800 ring-offset-2 transform scale-105"
+          : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200 hover:border-slate-300 hover:shadow-sm";
+
+        const countClass = isActive
+          ? "bg-white/20 text-white"
+          : "bg-slate-100 text-slate-400";
+
+        return `
+          <button type="button" 
+              class="filter-btn px-4 py-2 rounded-full text-sm font-bold transition-all duration-200 whitespace-nowrap flex items-center gap-2 ${btnClass}"
+              data-filter="${f.id}">
+              <span>${f.label}</span>
+              <span class="px-1.5 py-0.5 rounded-md text-[10px] ${countClass}">${f.count}</span>
+          </button>
+        `;
+      })
+      .join("");
+
+    // 5. Listeners
+    filterContainer.querySelectorAll(".filter-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        this.activeFilter = btn.dataset.filter;
+        this.renderFilters(); // Re-renderizar para actualizar estilos activo/inactivo
+        this.renderGrid(); // Filtrar documentos
+      });
+    });
+  }
+
+  /**
+   * Renderiza la cuadrícula de tarjetas según el filtro activo
+   */
+  renderGrid() {
+    const gridContainer = document.getElementById("vaultGridContainer");
+    if (!gridContainer) return;
+
+    // 1. Filtrar
+    let displayDocs = this.documents;
+    if (this.activeFilter !== "all") {
+      displayDocs = this.documents.filter(
+        (d) => (d.templateName || "Sin Plantilla") === this.activeFilter
+      );
+    }
+
+    // 2. Estado Vacío (Total o Parcial)
+    if (displayDocs.length === 0) {
+      if (this.documents.length === 0) {
+        this.renderEmptyStateTotal(gridContainer); // Bóveda vacía (sin documentos)
+      } else {
+        // Bóveda con documentos, pero ninguno coincide con el filtro (raro, pero posible)
+        gridContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <i class="fas fa-search text-3xl mb-3 opacity-20"></i>
+                    <p>No hay documentos en esta categoría.</p>
+                </div>`;
+      }
+      return;
+    }
+
+    // 3. Renderizar Grid
+    gridContainer.innerHTML = `
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pb-20">
+        ${displayDocs.map((doc) => this.renderCardHtml(doc)).join("")}
+      </div>
+    `;
+
+    // 4. Listeners de Click en Tarjetas
+    gridContainer.querySelectorAll(".doc-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        this.onViewDocument(card.dataset.id);
+      });
+    });
+  }
+
+  /**
+   * Genera el HTML de una tarjeta individual
+   */
+  renderCardHtml(doc) {
+    const color = doc.color || "#4f46e5";
+    const icon = doc.icon || "📋";
+    const title = doc.title || "Sin título";
+    const templateName = doc.templateName || "Documento";
+    const date = new Date(doc.updatedAt).toLocaleDateString();
+
+    return `
+      <div class="doc-card group relative bg-white hover:bg-slate-50 rounded-3xl p-5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-slate-100 cursor-pointer overflow-hidden" data-id="${doc.id}">
+          
+          <div class="absolute top-0 left-0 w-full h-1.5" style="background-color: ${color}"></div>
+          
+          <div class="absolute top-5 right-5 text-slate-300 group-hover:text-slate-500 transition-colors">
+              <i class="fas fa-chevron-right text-xs"></i>
+          </div>
+
+          <div class="flex items-center gap-4 mb-4 pr-6">
+              <div class="flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-2xl text-xl shadow-sm transition-transform duration-300 group-hover:scale-110"
+                   style="background-color: ${color}15; color: ${color}">
+                  ${icon}
+              </div>
+              
+              <div class="flex-1 min-w-0">
+                  <h3 class="text-base font-bold text-slate-800 truncate leading-tight group-hover:text-slate-900 transition-colors mb-1">
+                      ${title}
+                  </h3>
+                  <span class="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border border-slate-100 bg-white text-slate-500 shadow-sm truncate max-w-full">
+                      ${templateName}
+                  </span>
+              </div>
+          </div>
+
+          <div class="flex items-center justify-between text-xs text-slate-400 pt-3 border-t border-slate-100">
+              <div class="flex items-center gap-1.5 truncate">
+                  <i class="far fa-clock"></i> <span>${date}</span>
+              </div>
+              <div class="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium flex-shrink-0">
+                  <i class="fas fa-lock text-[10px]"></i> <span>E2EE</span>
+              </div>
+          </div>
+      </div>
+    `;
+  }
+
+  renderEmptyStateTotal(container) {
+    container.innerHTML = `
         <div class="text-center py-16 px-4">
           <div class="inline-block p-6 rounded-full bg-slate-50 mb-4 animate-fade-in-up">
             <i class="fas fa-folder-open text-4xl text-slate-300"></i>
@@ -113,173 +253,20 @@ export class VaultList {
           </button>
         </div>`;
 
-      // IMPORTANTE: Usamos this.onNewDocument para que salte el SetupModal si es necesario
-      container
-        .querySelector("#btnEmptyStateNew")
-        ?.addEventListener("click", this.onNewDocument);
-      return;
-    }
+    container
+      .querySelector("#btnEmptyStateNew")
+      ?.addEventListener("click", this.onNewDocument);
+  }
 
-    // Grid de documentos
-    const grid = this.createElement("div", [
-      "grid",
-      "grid-cols-1",
-      "sm:grid-cols-2",
-      "lg:grid-cols-3",
-      "gap-5",
-      "pb-20",
-    ]);
-
-    documents.forEach((doc) => {
-      const card = this.createElement("div", [
-        "group",
-        "relative",
-        "bg-white",
-        "hover:bg-slate-50",
-        "rounded-3xl",
-        "p-5",
-        "shadow-sm",
-        "hover:shadow-xl",
-        "hover:-translate-y-1",
-        "transition-all",
-        "duration-300",
-        "border",
-        "border-slate-100",
-        "cursor-pointer",
-        "overflow-hidden",
-      ]);
-
-      const colorStrip = this.createElement("div", [
-        "absolute",
-        "top-0",
-        "left-0",
-        "w-full",
-        "h-1.5",
-      ]);
-      colorStrip.style.backgroundColor = doc.color || "#4f46e5";
-      card.appendChild(colorStrip);
-
-      const arrowDiv = this.createElement("div", [
-        "absolute",
-        "top-5",
-        "right-5",
-        "text-slate-300",
-        "group-hover:text-slate-500",
-        "transition-colors",
-      ]);
-      arrowDiv.innerHTML = '<i class="fas fa-chevron-right text-xs"></i>';
-      card.appendChild(arrowDiv);
-
-      const mainRow = this.createElement("div", [
-        "flex",
-        "items-center",
-        "gap-4",
-        "mb-4",
-        "pr-6",
-      ]);
-
-      const iconBox = this.createElement("div", [
-        "flex-shrink-0",
-        "flex",
-        "items-center",
-        "justify-center",
-        "w-12",
-        "h-12",
-        "rounded-2xl",
-        "text-xl",
-        "shadow-sm",
-        "transition-transform",
-        "duration-300",
-        "group-hover:scale-110",
-      ]);
-      iconBox.style.backgroundColor = (doc.color || "#4f46e5") + "15";
-      iconBox.style.color = doc.color || "#4f46e5";
-      iconBox.textContent = doc.icon || "📋";
-      mainRow.appendChild(iconBox);
-
-      const textInfo = this.createElement("div", ["flex-1", "min-w-0"]);
-
-      const title = this.createElement("h3", [
-        "text-base",
-        "font-bold",
-        "text-slate-800",
-        "truncate",
-        "leading-tight",
-        "group-hover:text-slate-900",
-        "transition-colors",
-        "mb-1",
-      ]);
-      title.textContent = doc.title || "Sin título";
-      textInfo.appendChild(title);
-
-      const badge = this.createElement("span", [
-        "inline-block",
-        "px-2",
-        "py-0.5",
-        "rounded-md",
-        "text-[10px]",
-        "font-bold",
-        "uppercase",
-        "tracking-wide",
-        "border",
-        "border-slate-100",
-        "bg-white",
-        "text-slate-500",
-        "shadow-sm",
-        "truncate",
-        "max-w-full",
-      ]);
-      badge.textContent = doc.templateName || "Documento";
-      textInfo.appendChild(badge);
-
-      mainRow.appendChild(textInfo);
-      card.appendChild(mainRow);
-
-      const footer = this.createElement("div", [
-        "flex",
-        "items-center",
-        "justify-between",
-        "text-xs",
-        "text-slate-400",
-        "pt-3",
-        "border-t",
-        "border-slate-100",
-      ]);
-
-      const dateDiv = this.createElement("div", [
-        "flex",
-        "items-center",
-        "gap-1.5",
-        "truncate",
-      ]);
-      dateDiv.innerHTML = `<i class="far fa-clock"></i> <span>${new Date(
-        doc.updatedAt
-      ).toLocaleDateString()}</span>`;
-      footer.appendChild(dateDiv);
-
-      const secureBadge = this.createElement("div", [
-        "flex",
-        "items-center",
-        "gap-1",
-        "text-emerald-600",
-        "bg-emerald-50",
-        "px-2",
-        "py-0.5",
-        "rounded-full",
-        "font-medium",
-        "flex-shrink-0",
-      ]);
-      secureBadge.innerHTML =
-        '<i class="fas fa-lock text-[10px]"></i> <span>E2EE</span>';
-      footer.appendChild(secureBadge);
-
-      card.appendChild(footer);
-
-      card.addEventListener("click", () => this.onViewDocument(doc.id));
-
-      grid.appendChild(card);
-    });
-
-    container.appendChild(grid);
+  renderErrorState(container) {
+    container.innerHTML = `
+        <div class="text-center py-12 bg-red-50 rounded-2xl border border-red-100">
+          <div class="inline-flex bg-red-100 p-3 rounded-full text-red-500 mb-3"><i class="fas fa-exclamation-triangle"></i></div>
+          <p class="text-red-600 font-medium">No se pudieron cargar los documentos.</p>
+          <button id="retryBtn" class="mt-4 text-sm text-red-700 underline hover:text-red-900">Reintentar</button>
+        </div>`;
+    document
+      .getElementById("retryBtn")
+      ?.addEventListener("click", () => this.loadDocuments());
   }
 }

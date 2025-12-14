@@ -694,8 +694,36 @@ export class DocumentViewer {
   }
 
   generateTableBodyHtml(field, rows) {
-    // ... (Código original)
-    return this.renderTableField(field, rows).match(/<tbody>(.*?)<\/tbody>/)[1];
+    const fullHtml = this.renderTableField(field, rows);
+
+    // CORRECCIÓN CLAVE:
+    // 1. <tbody[^>]*> : Acepta cualquier cosa dentro de la etiqueta (como id="...")
+    // 2. ([\s\S]*?)   : Captura todo el contenido, incluyendo saltos de línea (multilínea)
+    const match = fullHtml.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i);
+
+    if (match) {
+      return match[1];
+    }
+
+    // FALLBACK ROBUSTO:
+    // Si la búsqueda no devuelve resultados (la lista 'rows' está vacía por el filtro),
+    // renderTableField devuelve un <div> de "Tabla vacía" en lugar de una <table>.
+    // Para no romper la UI, devolvemos una fila avisando que no hay coincidencias.
+
+    const isComplex = field.columns.length > 3;
+    const colCount =
+      (isComplex ? 3 : field.columns.length) + (isComplex ? 1 : 0);
+
+    return `
+        <tr>
+            <td colspan="${colCount}" class="px-6 py-8 text-center text-slate-400 text-sm bg-white">
+                <div class="flex flex-col items-center gap-2">
+                    <i class="fas fa-search opacity-20 text-2xl"></i>
+                    <span>No se encontraron coincidencias</span>
+                </div>
+            </td>
+        </tr>
+    `;
   }
 
   refreshTableFieldHTML(fieldId) {
