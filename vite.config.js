@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import { resolve } from "path";
 
 export default defineConfig({
-  root: "", // Raíz del proyecto
+  root: "/mi-gestion-app/", // Raíz del proyecto
   publicDir: "assets", // Carpeta para archivos estáticos
   build: {
     outDir: "dist",
