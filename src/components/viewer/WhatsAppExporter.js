@@ -18,6 +18,7 @@ export async function copyToWhatsApp(
       // CASO 1: TABLAS
       if (field.type === "table") {
         const rows = Array.isArray(value) ? value : [];
+        // Solo mostramos el título si hay datos, o indicamos "Sin datos"
         waText += `*${field.label}:* ${
           rows.length === 0 ? "_Sin datos_" : ""
         }\n`;
@@ -29,11 +30,9 @@ export async function copyToWhatsApp(
           if (field.columns) {
             field.columns.forEach((col, index) => {
               const cellValue = row[col.id];
-              const formattedCell = formatValue(
-                col.type,
-                cellValue,
-                currencyConfig
-              );
+
+              // CAMBIO 1: Pasamos el objeto columna completo 'col'
+              const formattedCell = formatValue(col, cellValue, currencyConfig);
 
               // Agregamos separador " | " solo si no es la última columna
               const separator = index < field.columns.length - 1 ? " | " : "";
@@ -43,20 +42,18 @@ export async function copyToWhatsApp(
           waText += `\n`;
         });
         waText += `\n`; // Salto de línea extra después de la tabla
+        return; // Continuar con el siguiente campo
       }
+
       // CASO 2: CAMPOS NORMALES
-      else {
-        waText += `*${field.label}:* ${formatValue(
-          field.type,
-          value,
-          currencyConfig
-        )}\n`;
-      }
+      // CAMBIO 2: Pasamos el objeto campo completo 'field'
+      const formattedValue = formatValue(field, value, currencyConfig);
+      waText += `*${field.label}:* ${formattedValue}\n`;
     });
 
-    waText += `\n_Enviado desde Mi Gestión_`;
+    // Agregar pie de página o firma si se desea
+    waText += `\n_Generado el ${new Date().toLocaleDateString()}_`;
 
-    // Copiar al portapapeles
     await navigator.clipboard.writeText(waText);
     return true; // Éxito
   } catch (e) {
@@ -68,21 +65,21 @@ export async function copyToWhatsApp(
 /**
  * Función auxiliar para dar formato de TEXTO (no HTML) a los valores.
  * Maneja objetos complejos como {url, text}
+ * * AHORA RECIBE EL OBJETO DE CONFIGURACIÓN COMPLETO (fieldDefinition)
  */
-function formatValue(type, value, currencyConfig) {
+function formatValue(fieldDefinition, value, currencyConfig) {
+  const type = fieldDefinition.type;
+
   // 1. Manejo de vacíos
   if (value === undefined || value === null || value === "") return "_N/A_";
 
-  // 2. Manejo de OBJETOS (Tu observación corregida)
-  // Si es un objeto (ej. imagen o link en tabla), extraemos lo útil
+  // 2. Manejo de OBJETOS (imágenes, urls)
   if (typeof value === "object" && value !== null) {
-    // Si tiene propiedad 'text' y 'url' (común en tus campos URL/Imagen)
     if (value.url) {
       const display =
         value.text && value.text !== value.url ? `${value.text}: ` : "";
       return `${display}${value.url}`;
     }
-    // Fallback por si es otro tipo de objeto
     return JSON.stringify(value);
   }
 
@@ -90,8 +87,21 @@ function formatValue(type, value, currencyConfig) {
   switch (type) {
     case "boolean":
       return value ? "Sí" : "No";
+
     case "currency":
-      return new Intl.NumberFormat(currencyConfig.locale).format(Number(value));
+      // CAMBIO 3: Usamos el símbolo del campo y formato manual
+      const symbol = fieldDefinition.currencySymbol || "$";
+      let formatted;
+      try {
+        formatted = new Intl.NumberFormat("es-ES", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(Number(value));
+      } catch (e) {
+        formatted = value;
+      }
+      return `${symbol} ${formatted}`;
+
     case "date":
       // Intentar formatear fecha si es string YYYY-MM-DD
       try {
@@ -100,9 +110,8 @@ function formatValue(type, value, currencyConfig) {
           return `${d}/${m}/${y}`;
         }
       } catch (e) {}
-      return String(value);
-    case "percentage":
-      return `${value}%`;
+      return value;
+
     default:
       return String(value);
   }
