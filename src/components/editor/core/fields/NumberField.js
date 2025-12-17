@@ -333,20 +333,29 @@ export class NumberField extends AbstractField {
     const input = this.domElement;
     const value = input.value.trim();
     if (!value) return;
+
+    // Solo si parece una fórmula (contiene operadores)
     if (/^[\d\s\.\+\-\*\/\(\)]+$/.test(value) && /[\+\-\*\/]/.test(value)) {
       try {
         const result = new Function('"use strict";return (' + value + ")")();
-        if (isFinite(result)) {
-          const finalVal = Math.round(result * 100) / 100;
-          input.value = finalVal;
-          this.value = finalVal;
-          this.onChange(this.def.id, finalVal);
-          this.showSuccessFeedback(input);
+
+        // CORRECCIÓN SOLICITADA:
+        // Si es NaN o Infinito, NO HACER NADA (dejar el texto como está)
+        if (isNaN(result) || !isFinite(result)) {
+          return;
         }
+
+        // Si es válido, reemplazamos
+        const finalVal = Math.round(result * 100) / 100;
+        input.value = finalVal;
+        this.value = finalVal;
+        this.onChange(this.def.id, finalVal);
+        this.showSuccessFeedback(input);
       } catch (e) {
         console.warn(e);
       }
     } else {
+      // Si no es fórmula, actualizamos el valor normalmente
       this.value = value;
       this.onChange(this.def.id, value);
     }
