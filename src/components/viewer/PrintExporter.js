@@ -1,24 +1,23 @@
 // src/components/viewer/PrintExporter.js
 import { getLocalCurrency } from "../../utils/helpers.js";
 
-// Aceptamos 'printMode' en lugar de un booleano
 export const printDocument = (
   documentMetadata,
   template,
   decryptedData,
-  printMode = "standard" // Opciones: 'standard', 'compact', 'accessible'
+  printMode = "standard" // 'standard' | 'compact' | 'accessible'
 ) => {
   const isCompact = printMode === "compact";
   const isAccessible = printMode === "accessible";
 
-  // 1. LIMPIEZA TOTAL
+  // 1. LIMPIEZA
   const iframeId = "print-target-iframe";
   const oldFrames = document.querySelectorAll(
     `#${iframeId}, iframe[name='print_frame']`
   );
   oldFrames.forEach((frame) => frame.remove());
 
-  // 2. CREACIÓN BLINDADA
+  // 2. CREACIÓN
   const iframe = document.createElement("iframe");
   iframe.id = iframeId;
   iframe.name = "print_frame";
@@ -45,17 +44,24 @@ export const printDocument = (
     printMode
   );
 
-  // Definición de márgenes según modo
+  // CONFIGURACIÓN DE PÁGINA SEGÚN MODO
+  // Standard: 1.5cm | Compacto: 1cm | Lectura Fácil: 0.5cm (mínimo)
   let pageMargin = "1.5cm";
   if (isCompact) pageMargin = "1cm";
-  if (isAccessible) pageMargin = "0.5cm"; // Márgenes mínimos para aprovechar espacio
+  if (isAccessible) pageMargin = "0.5cm";
 
-  // Definición de fuente y color según modo
-  const baseFontSize = isAccessible ? "14px" : "12px";
+  // FUENTE SEGÚN MODO
+  // Standard: 12px | Compacto: 9px (apretado) | Lectura Fácil: 16px (grande)
+  let baseFontSize = "12px";
+  if (isCompact) baseFontSize = "9px"; // Compacto original
+  if (isAccessible) baseFontSize = "16px"; // Lectura fácil
+
+  // COLOR
+  // Accessible fuerza negro puro (#000000)
   const baseColor = isAccessible ? "#000000" : "#0f172a";
   const lineHeight = isAccessible ? "1.4" : "1.5";
+  const fontFamily = isAccessible ? "Arial, sans-serif" : "'Inter', sans-serif";
 
-  // 3. HTML ESTRUCTURAL
   const fullHtml = `
         <!DOCTYPE html>
         <html lang="es">
@@ -80,7 +86,7 @@ export const printDocument = (
                 }
                 
                 body { 
-                    font-family: 'Inter', sans-serif;
+                    font-family: ${fontFamily};
                     background-color: white;
                     color: ${baseColor};
                     font-size: ${baseFontSize};
@@ -93,17 +99,18 @@ export const printDocument = (
                     box-shadow: none !important;
                 }
                 
-                /* Ajustes específicos para accesibilidad */
+                /* Forzar contraste máximo en modo Lectura Fácil */
                 ${
                   isAccessible
                     ? `
-                    strong, b, h1, h2, h3, th, dt, .font-bold {
+                    .text-slate-500, .text-slate-400, .text-slate-300, .text-slate-900 {
                         color: #000000 !important;
-                        font-weight: 800 !important;
                     }
-                    .text-slate-500, .text-slate-400, .text-slate-300 {
-                        color: #000000 !important; /* Eliminar grises */
+                    .border-slate-100, .border-slate-200 {
+                        border-color: #000000 !important;
                     }
+                    /* Engrosar textos para legibilidad */
+                    dd, span, p { font-weight: 600 !important; }
                 `
                     : ""
                 }
@@ -137,7 +144,7 @@ function generatePrintHtml(
   printMode
 ) {
   const isCompact = printMode === "compact";
-  const isAccessible = printMode === "accessible";
+  const isAccessible = printMode === "accessible"; // Modo Lectura Fácil
 
   let date = "Fecha desconocida";
   try {
@@ -154,26 +161,26 @@ function generatePrintHtml(
   // --- 1. ENCABEZADO ---
   let headerHtml = "";
 
-  // Para 'accessible' usamos el layout compacto (ahorra espacio) pero con letra grande
+  // USAMOS EL DISEÑO COMPACTO PARA 'COMPACTO' Y 'LECTURA FÁCIL'
   if (isCompact || isAccessible) {
     headerHtml = `
-        <div class="flex justify-between items-end border-b-2 border-black pb-3 mb-6">
+        <div class="flex justify-between items-end border-b-2 border-black pb-2 mb-4">
             <div class="flex items-center gap-3">
                 <div class="${isAccessible ? "text-2xl" : "text-lg"}">
                     ${template.icon || '<i class="fas fa-file"></i>'}
                 </div>
                 <div>
                     <h1 class="${
-                      isAccessible ? "text-2xl" : "text-xl"
+                      isAccessible ? "text-3xl" : "text-xl"
                     } font-bold leading-none">${metadata.title}</h1>
                     <p class="${
                       isAccessible
-                        ? "text-xs mt-1 font-bold uppercase"
+                        ? "text-sm mt-1 font-bold uppercase"
                         : "text-[10px] text-slate-500 mt-1 uppercase tracking-widest"
                     }">${template.name}</p>
                 </div>
             </div>
-            <div class="text-right ${isAccessible ? "text-xs" : "text-[10px]"}">
+            <div class="text-right ${isAccessible ? "text-sm" : "text-[10px]"}">
                 <p class="font-bold">${date}</p>
                 <p class="${
                   isAccessible ? "" : "text-slate-400"
@@ -181,7 +188,7 @@ function generatePrintHtml(
             </div>
         </div>`;
   } else {
-    // ESTILO STANDARD
+    // ESTILO STANDARD (Visual)
     headerHtml = `
         <div class="mb-10">
              <div class="flex justify-between items-start">
@@ -215,24 +222,27 @@ function generatePrintHtml(
   }
 
   // --- 2. CUERPO ---
-  // Accesible: 1 columna para lectura lineal. Compacto: 4 columnas. Standard: 2 columnas.
-  let gridCols = "grid-cols-2 gap-x-8 gap-y-6";
+  // Lógica de Grilla:
+  // Compacto original: 4 columnas.
+  // Lectura Fácil: 2 columnas (para que quepa la letra grande).
+  let gridCols = "grid-cols-2 gap-x-8 gap-y-6"; // Standard
   if (isCompact) gridCols = "grid-cols-4 gap-4";
-  if (isAccessible) gridCols = "grid-cols-1 gap-2";
+  if (isAccessible) gridCols = "grid-cols-2 gap-4"; // Modificado: 2 Cols pero estilo compacto
 
   let html = `${headerHtml}<div class="grid ${gridCols}">`;
 
   template.fields.forEach((field) => {
     const value = data[field.id];
 
-    // Cálculo de columnas (Span)
+    // Cálculo de Span
     let spanClass = "col-span-1";
     const isWideType =
       ["separator", "table", "textarea"].includes(field.type) ||
       (field.type === "text" && String(value).length > 60);
 
     if (isAccessible) {
-      spanClass = "col-span-1"; // Siempre ancho completo en modo accesible
+      // En modo accesible, los campos anchos ocupan las 2 columnas
+      spanClass = isWideType ? "col-span-2" : "col-span-1";
     } else if (isCompact) {
       spanClass = isWideType ? "col-span-4" : "col-span-1";
     } else {
@@ -244,13 +254,8 @@ function generatePrintHtml(
       html += `
             <div class="${spanClass} mt-4 mb-2 page-break border-b-2 border-black">
                 <h3 class="${
-                  isAccessible ? "text-base" : "text-sm"
+                  isAccessible ? "text-lg" : "text-sm"
                 } font-bold uppercase tracking-wider pb-1 flex items-center gap-2">
-                    ${
-                      !isCompact && !isAccessible
-                        ? `<i class="fas fa-chevron-right text-[10px] text-slate-400"></i>`
-                        : ""
-                    } 
                     ${field.label}
                 </h3>
             </div>`;
@@ -269,27 +274,28 @@ function generatePrintHtml(
     }
 
     // C) CAMPOS
-    // CAMBIO IMPORTANTE: Pasamos el objeto 'field' completo, no solo 'field.type'
     const displayValue = formatPrintValue(
-      field, // <--- CAMBIO AQUÍ
+      field,
       value,
       currencyConfig,
       printMode
     );
 
-    if (isAccessible) {
-      // Diseño Accesible: Label: Valor (lineal, muy claro)
-      html += `
-            <div class="${spanClass} border-b border-black py-2 page-break">
-              <span class="font-bold uppercase text-xs mr-2 block sm:inline">${field.label}:</span>
-              <span class="text-base font-bold">${displayValue}</span>
-            </div>`;
-    } else if (isCompact) {
-      // Diseño Compacto
+    // USAMOS EL DISEÑO COMPACTO PARA 'COMPACTO' Y 'LECTURA FÁCIL'
+    // La diferencia es que 'isAccessible' tendrá clases CSS inyectadas para letra grande.
+    if (isCompact || isAccessible) {
+      // Diseño "Estilo Compacto" (Label pequeña arriba, Valor abajo, linea divisoria)
+      // En Accessible se ve igual, pero todo es más grande gracias al font-size del body.
       html += `
             <div class="${spanClass} border-b border-slate-100 py-1 page-break">
-              <span class="text-[10px] font-bold text-slate-500 uppercase mr-1">${field.label}:</span>
-              <span class="text-xs font-semibold text-slate-900">${displayValue}</span>
+              <span class="${
+                isAccessible ? "text-xs" : "text-[9px]"
+              } font-bold text-slate-500 uppercase mr-1 block">${
+        field.label
+      }:</span>
+              <span class="${
+                isAccessible ? "text-base" : "text-[10px]"
+              } font-semibold text-slate-900">${displayValue}</span>
             </div>`;
     } else {
       // Diseño Standard
@@ -304,20 +310,12 @@ function generatePrintHtml(
   html += `</div>`;
 
   // --- 3. PIE DE PÁGINA ---
-  if (!isCompact) {
-    // En modo accesible mantenemos el footer pero simplificado y con alto contraste
-    const footerClass = isAccessible
-      ? "border-black text-black font-bold mt-8 pt-4"
-      : "border-slate-200 text-slate-400 mt-16 pt-6";
-
+  // Solo mostramos footer si NO es compacto/accesible (para ahorrar espacio al máximo)
+  if (!isCompact && !isAccessible) {
     html += `
-        <div class="${footerClass} border-t flex items-center justify-between">
+        <div class="border-t border-slate-200 text-slate-400 mt-16 pt-6 flex items-center justify-between">
            <div class="flex items-center text-[10px] font-bold uppercase tracking-widest gap-2">
-                ${
-                  isAccessible
-                    ? ""
-                    : '<i class="fas fa-lock text-slate-300"></i>'
-                }
+                <i class="fas fa-lock text-slate-300"></i>
                 <span>Documento Protegido (E2EE)</span>
            </div>
            <div class="text-[9px]">
@@ -336,7 +334,7 @@ function renderPrintTable(field, rows, currencyConfig, printMode) {
   const isAccessible = printMode === "accessible";
 
   if (!Array.isArray(rows) || rows.length === 0) {
-    if (isCompact) return "";
+    if (isCompact || isAccessible) return "";
     return `<div class="py-2 text-xs italic text-center border-b border-slate-100">${field.label} (Sin datos)</div>`;
   }
 
@@ -348,19 +346,14 @@ function renderPrintTable(field, rows, currencyConfig, printMode) {
     fontSize = "text-[9px]";
   }
   if (isAccessible) {
-    padding = "px-1 py-0.5";
-    fontSize = "text-xs";
+    padding = "px-1 py-1"; // Padding reducido
+    fontSize = "text-sm"; // Letra más grande en tablas
   }
-
-  const borderColor = isAccessible ? "border-black" : "border-slate-200";
-  const headerText = isAccessible
-    ? "text-black border-black"
-    : "text-slate-500 border-slate-200";
 
   const headers = field.columns
     .map(
       (c) =>
-        `<th class="${padding} text-left ${fontSize} font-bold ${headerText} uppercase tracking-wider border-b-2">${c.label}</th>`
+        `<th class="${padding} text-left ${fontSize} font-bold uppercase tracking-wider border-b-2 border-black">${c.label}</th>`
     )
     .join("");
 
@@ -369,9 +362,8 @@ function renderPrintTable(field, rows, currencyConfig, printMode) {
       const cells = field.columns
         .map(
           (col) =>
-            // CAMBIO IMPORTANTE: Pasamos la columna 'col' completa a formatPrintValue
-            `<td class="${padding} ${fontSize} ${borderColor} border-b align-top">${formatPrintValue(
-              col, // <--- CAMBIO AQUÍ (Antes era col.type)
+            `<td class="${padding} ${fontSize} border-b border-slate-200 align-top">${formatPrintValue(
+              col,
               row[col.id],
               currencyConfig,
               printMode
@@ -385,11 +377,9 @@ function renderPrintTable(field, rows, currencyConfig, printMode) {
   return `
         <div class="mt-2 mb-4 page-break w-full">
             ${
-              !isCompact
-                ? `<label class="block text-[10px] font-bold uppercase mb-1 ${
-                    isAccessible ? "text-black" : "text-slate-400"
-                  }">${field.label}</label>`
-                : ""
+              !isCompact // En compacto a veces se oculta el label si es obvio, pero aquí lo dejamos
+                ? `<label class="block text-[10px] font-bold uppercase mb-1">${field.label}</label>`
+                : `<label class="block text-[10px] font-bold uppercase mb-1 border-b border-black">${field.label}</label>`
             }
             <table class="w-full border-collapse">
                 <thead><tr>${headers}</tr></thead>
@@ -398,14 +388,10 @@ function renderPrintTable(field, rows, currencyConfig, printMode) {
         </div>`;
 }
 
-/**
- * Función central de formato.
- * AHORA RECIBE EL OBJETO 'FIELD' COMPLETO en el primer argumento.
- */
 function formatPrintValue(field, value, currencyConfig, printMode) {
   const isCompact = printMode === "compact";
   const isAccessible = printMode === "accessible";
-  const type = field.type; // Extraemos el tipo del objeto
+  const type = field.type;
 
   if (value === undefined || value === null || value === "") {
     if (isAccessible) return "—";
@@ -415,14 +401,19 @@ function formatPrintValue(field, value, currencyConfig, printMode) {
   if (typeof value === "object" && value.url) {
     // Imágenes
     if (type === "url" && value.url.match(/\.(jpeg|jpg|gif|png|webp)$/i)) {
-      const size = isCompact || isAccessible ? "w-6 h-6" : "w-12 h-12";
+      // En accesible las imágenes se ven un poco más grandes que en compacto para distinguirlas
+      const size = isCompact
+        ? "w-6 h-6"
+        : isAccessible
+        ? "w-10 h-10"
+        : "w-12 h-12";
       return `<div class="flex items-center gap-2">
                 <img src="${
                   value.url
                 }" class="${size} object-cover rounded border border-slate-200 bg-slate-50">
-                <span class="text-xs font-medium">${
-                  value.text || "Imagen"
-                }</span>
+                <span class="${
+                  isAccessible ? "text-sm" : "text-xs"
+                } font-medium">${value.text || "Imagen"}</span>
              </div>`;
     }
     return `<span class="text-xs font-medium">${
@@ -434,12 +425,8 @@ function formatPrintValue(field, value, currencyConfig, printMode) {
     case "boolean":
       return value ? "SÍ" : "NO";
 
-    // --- LÓGICA CORREGIDA PARA MONEDA ---
     case "currency":
-      // 1. Usamos el símbolo del campo (o fallback a $)
       const symbol = field.currencySymbol || "$";
-
-      // 2. Formateamos solo el número (sin código de moneda automático)
       let formatted;
       try {
         formatted = new Intl.NumberFormat("es-ES", {
@@ -449,9 +436,7 @@ function formatPrintValue(field, value, currencyConfig, printMode) {
       } catch (e) {
         formatted = value;
       }
-
-      // 3. Concatenamos manualmente
-      return `<span class="font-mono font-bold">${symbol} ${formatted}</span>`;
+      return `<span class="font-mono font-bold whitespace-nowrap">${symbol} ${formatted}</span>`;
 
     case "date":
       try {

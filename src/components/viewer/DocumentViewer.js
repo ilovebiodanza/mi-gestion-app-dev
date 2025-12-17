@@ -318,6 +318,13 @@ export class DocumentViewer {
                                 <span class="block text-xs text-slate-400">Ahorro de papel y tinta</span>
                             </div>
                         </button>
+                        <button id="printAccessibleBtn" class="w-full flex items-center p-3 border border-slate-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left group">
+                            <i class="fas fa-glasses text-2xl text-slate-300 group-hover:text-blue-500 mr-4"></i>
+                            <div>
+                                <span class="block font-bold text-slate-700 text-sm">Formato para Lectura Fácil</span>
+                                <span class="block text-xs text-slate-400">Letra grande, márgenes mínimos</span>
+                            </div>
+                        </button>
                     </div>
                 </div>
                 <div class="bg-slate-50 p-3 text-center border-t border-slate-100">
@@ -335,11 +342,15 @@ export class DocumentViewer {
     document.getElementById("cancelPrintBtn").onclick = closeFn;
 
     document.getElementById("printStandardBtn").onclick = () => {
-      this.triggerPrint(false);
+      this.triggerPrint("standard");
       closeFn();
     };
     document.getElementById("printCompactBtn").onclick = () => {
-      this.triggerPrint(true);
+      this.triggerPrint("compact");
+      closeFn();
+    };
+    document.getElementById("printAccessibleBtn").onclick = () => {
+      this.triggerPrint("accessible"); // Activamos el nuevo modo
       closeFn();
     };
 
