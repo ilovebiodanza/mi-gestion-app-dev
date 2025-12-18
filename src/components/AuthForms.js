@@ -84,11 +84,36 @@ export class AuthForms {
                 </div>
                 <div class="relative group">
                   <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <i class="fas fa-lock text-slate-400 group-focus-within:text-brand-500 transition-colors"></i>
+                    <i class="fas fa-lock text-slate-400"></i>
                   </div>
                   <input type="password" id="password" required 
-                    class="block w-full pl-10 pr-3 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all sm:text-sm"
-                    placeholder="••••••••••••">
+                                    class="block w-full pl-10 pr-3 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all sm:text-sm"
+                                    placeholder="••••••••••••">
+                  <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-slate-400 hover:text-brand-600 transition-colors focus:outline-none">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <div id="password-requirements" class="mt-3 space-y-1.5 hidden transition-all duration-300 pl-1">
+                    <p class="text-xs text-slate-500 flex items-center gap-2 transition-colors duration-300" data-req="length">
+                        <i class="fas fa-lock-open text-red-400 text-[10px] w-3 text-center"></i> 
+                        <span>Mínimo 8 caracteres</span>
+                    </p>
+                    <p class="text-xs text-slate-500 flex items-center gap-2 transition-colors duration-300" data-req="upper">
+                        <i class="fas fa-lock-open text-red-400 text-[10px] w-3 text-center"></i> 
+                        <span>Una mayúscula</span>
+                    </p>
+                    <p class="text-xs text-slate-500 flex items-center gap-2 transition-colors duration-300" data-req="lower">
+                        <i class="fas fa-lock-open text-red-400 text-[10px] w-3 text-center"></i> 
+                        <span>Una minúscula</span>
+                    </p>
+                    <p class="text-xs text-slate-500 flex items-center gap-2 transition-colors duration-300" data-req="number">
+                        <i class="fas fa-lock-open text-red-400 text-[10px] w-3 text-center"></i> 
+                        <span>Un número</span>
+                    </p>
+                    <p class="text-xs text-slate-500 flex items-center gap-2 transition-colors duration-300" data-req="symbol">
+                        <i class="fas fa-lock-open text-red-400 text-[10px] w-3 text-center"></i> 
+                        <span>Un carácter especial (!@#$%)</span>
+                    </p>
                 </div>
                 ${
                   !this.isLoginMode
@@ -127,6 +152,13 @@ export class AuthForms {
     const tabRegister = container.querySelector("#tabRegister");
     const forgotPwd = container.querySelector("#forgotPassword");
 
+    // Elementos nuevos para validación y UI
+    const passwordInput = container.querySelector("#password");
+    const toggleBtn = container.querySelector("#togglePassword"); // Botón del ojo
+    const requirementsList = container.querySelector("#password-requirements");
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    // --- 1. Cambio de Modo (Login / Registro) ---
     const switchMode = (isLogin) => {
       this.isLoginMode = isLogin;
       this.updateView(container);
@@ -135,6 +167,95 @@ export class AuthForms {
     if (tabLogin) tabLogin.onclick = () => switchMode(true);
     if (tabRegister) tabRegister.onclick = () => switchMode(false);
 
+    // --- 2. Funcionalidad "Ver Contraseña" (Ojito) ---
+    if (toggleBtn && passwordInput) {
+      toggleBtn.onclick = () => {
+        const type =
+          passwordInput.getAttribute("type") === "password"
+            ? "text"
+            : "password";
+        passwordInput.setAttribute("type", type);
+
+        const icon = toggleBtn.querySelector("i");
+        icon.classList.toggle("fa-eye");
+        icon.classList.toggle("fa-eye-slash");
+      };
+    }
+
+    // --- 3. Lógica de Validación de Contraseña (Candados) ---
+    const validatePassword = (password) => {
+      // Si es Login, no validamos complejidad y habilitamos botón
+      if (this.isLoginMode) {
+        if (submitBtn) submitBtn.disabled = false;
+        return true;
+      }
+
+      const requirements = {
+        length: password.length >= 8,
+        upper: /[A-Z]/.test(password),
+        lower: /[a-z]/.test(password),
+        number: /[0-9]/.test(password),
+        symbol: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+      };
+
+      let allValid = true;
+
+      // Actualizar UI de cada requisito
+      if (requirementsList) {
+        for (const [key, isValid] of Object.entries(requirements)) {
+          const el = requirementsList.querySelector(`[data-req="${key}"]`);
+          if (!el) continue;
+
+          const icon = el.querySelector("i");
+
+          if (isValid) {
+            // CUMPLIDO: Texto verde, Candado cerrado verde
+            el.classList.remove("text-slate-500");
+            el.classList.add("text-emerald-600", "font-medium");
+            icon.className =
+              "fas fa-lock text-emerald-500 text-[10px] w-3 text-center transition-all duration-300 transform scale-110";
+          } else {
+            // NO CUMPLIDO: Texto gris, Candado abierto rojo
+            el.classList.add("text-slate-500");
+            el.classList.remove("text-emerald-600", "font-medium");
+            icon.className =
+              "fas fa-lock-open text-red-400 text-[10px] w-3 text-center transition-all duration-300";
+            allValid = false;
+          }
+        }
+      }
+
+      // Bloquear/Desbloquear botón de registro
+      if (submitBtn) {
+        submitBtn.disabled = !allValid;
+        submitBtn.classList.toggle("opacity-50", !allValid);
+        submitBtn.classList.toggle("cursor-not-allowed", !allValid);
+      }
+
+      return allValid;
+    };
+
+    // --- 4. Listeners de Input y Visibilidad ---
+
+    // Controlar visibilidad de la lista de requisitos
+    if (requirementsList) {
+      if (this.isLoginMode) {
+        requirementsList.classList.add("hidden");
+      } else {
+        requirementsList.classList.remove("hidden");
+        // Validar estado inicial al entrar en registro
+        if (passwordInput) validatePassword(passwordInput.value);
+      }
+    }
+
+    // Escuchar cambios en el input password
+    if (passwordInput) {
+      passwordInput.addEventListener("input", (e) => {
+        validatePassword(e.target.value);
+      });
+    }
+
+    // --- 5. Envío del Formulario (Submit) ---
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const email = form.email.value;
@@ -169,6 +290,7 @@ export class AuthForms {
       }
     });
 
+    // --- 6. Recuperar Contraseña ---
     if (forgotPwd) {
       forgotPwd.onclick = (e) => {
         e.preventDefault();

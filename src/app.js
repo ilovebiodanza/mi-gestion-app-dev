@@ -10,7 +10,6 @@ import { DocumentEditor } from "./components/editor/DocumentEditor.js";
 import { VaultList } from "./components/VaultList.js";
 import { DocumentViewer } from "./components/viewer/DocumentViewer.js";
 import { SettingsManager } from "./components/SettingsManager.js";
-import { documentService } from "./services/documents/index.js";
 
 console.log("🚀 Mi Gestión - Sistema Iniciado (v2.0 Clean UI)");
 

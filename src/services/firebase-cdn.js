@@ -14,26 +14,17 @@ class FirebaseCDNService {
   }
 
   // --- MÉTODOS DE LIMPIEZA DE DATOS ---
-  /**
-   * Limpia recursivamente un objeto o array, eliminando
-   * todas las propiedades con valor 'undefined'.
-   * Firestore no acepta 'undefined'.
-   */
   _cleanObject(obj) {
     if (typeof obj !== "object" || obj === null) {
       return obj;
     }
-
     if (Array.isArray(obj)) {
-      // Limpiar elementos del array
       return obj.map((item) => this._cleanObject(item));
     }
-
     const cleaned = {};
     for (const key in obj) {
       if (obj.hasOwnProperty(key)) {
         const value = obj[key];
-        // Solo incluir propiedades si no son 'undefined'
         if (value !== undefined) {
           cleaned[key] = this._cleanObject(value);
         }
@@ -41,22 +32,18 @@ class FirebaseCDNService {
     }
     return cleaned;
   }
-  // ------------------------------------
 
-  // Métodos de autenticación
+  // --- MÉTODOS DE AUTENTICACIÓN ---
   getAuth() {
     return this.auth;
   }
-
   getFirestore() {
     return this.db;
   }
-
   getApp() {
     return this.app;
   }
 
-  // Funciones helper
   async createUser(email, password) {
     return this.modules.createUserWithEmailAndPassword(
       this.auth,
@@ -85,26 +72,49 @@ class FirebaseCDNService {
     return this.modules.onAuthStateChanged(this.auth, callback);
   }
 
-  // Firestore helpers
+  // --- MÉTODOS DE DOCUMENTOS UNICOS ---
+  doc(path, ...pathSegments) {
+    // Mejora: Permite llamar a doc(db, "coll", "id") o doc(db, "coll/id")
+    if (pathSegments.length > 0) {
+      return this.modules.doc(this.db, path, ...pathSegments);
+    }
+    return this.modules.doc(this.db, path);
+  }
+
   getDoc(ref) {
     return this.modules.getDoc(ref);
   }
 
   setDoc(ref, data, options) {
-    // Añadir 'options' si se usa merge
-    // Limpieza automática antes de guardar en Firestore
-    const cleanedData = this._cleanObject(data); // <--- CAMBIO CLAVE
-
-    // Pasar el objeto de datos limpio a la función original de Firebase
+    const cleanedData = this._cleanObject(data);
     return this.modules.setDoc(ref, cleanedData, options);
   }
+
   deleteDoc(ref) {
-    // Llama a la función original de Firebase
     return this.modules.deleteDoc(ref);
   }
 
-  doc(path) {
-    return this.modules.doc(this.db, path);
+  // --- [NUEVO] MÉTODOS DE CONSULTA (Collections & Queries) ---
+  // Necesarios para listar documentos en el Dashboard
+
+  collection(path) {
+    return this.modules.collection(this.db, path);
+  }
+
+  query(collectionRef, ...queryConstraints) {
+    return this.modules.query(collectionRef, ...queryConstraints);
+  }
+
+  async getDocs(querySnapshot) {
+    return this.modules.getDocs(querySnapshot);
+  }
+
+  where(field, op, value) {
+    return this.modules.where(field, op, value);
+  }
+
+  orderBy(field, direction) {
+    return this.modules.orderBy(field, direction);
   }
 }
 
