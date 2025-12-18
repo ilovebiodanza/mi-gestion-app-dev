@@ -2,6 +2,8 @@
 import { backupService } from "../services/backup/index.js";
 import { authService } from "../services/auth.js";
 import { encryptionService } from "../services/encryption/index.js";
+import { PasswordPrompt } from "./PasswordPrompt.js"; // Necesario para pedir la clave antigua
+import { toast } from "./Toast.js";
 
 export class SettingsManager {
   render() {
@@ -23,16 +25,29 @@ export class SettingsManager {
                     <h3 class="font-bold text-slate-800 text-sm">Acceso (Login)</h3>
                 </div>
                 <div class="p-6">
-                    <form id="changeAccessPassForm" class="space-y-4">
-                        <div>
+                    <form id="changeAccessPassForm" class="space-y-5">
+                        <div class="relative group">
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Contraseña Actual</label>
-                            <input type="password" id="currentAccessPass" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm" required>
+                            <div class="relative">
+                                <input type="password" id="currentAccessPass" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm pr-10" required>
+                                <button type="button" class="toggle-pass absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-blue-600 cursor-pointer">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div>
+                        
+                        <div class="relative group">
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Nueva Contraseña</label>
-                            <input type="password" id="newAccessPass" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm" required minlength="6">
+                            <div class="relative">
+                                <input type="password" id="newAccessPass" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm pr-10" required>
+                                <button type="button" class="toggle-pass absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-blue-600 cursor-pointer">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div id="req-access" class="mt-2 space-y-1 pl-1 hidden"></div>
                         </div>
-                        <button type="submit" id="btnChangeAccess" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition text-sm shadow-sm">
+
+                        <button type="submit" id="btnChangeAccess" disabled class="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition text-sm shadow-sm mt-4">
                             Actualizar Login
                         </button>
                     </form>
@@ -53,15 +68,23 @@ export class SettingsManager {
                         <i class="fas fa-exclamation-triangle mr-1"></i> Cambiar esto re-cifrará todos tus documentos.
                     </p>
                     
-                    <form id="changeVaultPassForm" class="space-y-4">
-                        <div>
-                            <input type="password" id="currentVaultPass" placeholder="Llave Actual" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm font-mono" required>
+                    <form id="changeVaultPassForm" class="space-y-5">
+                        <div class="relative">
+                            <input type="password" id="currentVaultPass" placeholder="Llave Actual" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm font-mono pr-10" required>
+                            <button type="button" class="toggle-pass absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-amber-600 cursor-pointer">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <input type="password" id="newVaultPass" placeholder="Nueva Llave" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm font-mono" required minlength="8">
-                            <input type="password" id="confirmVaultPass" placeholder="Confirmar" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm font-mono" required>
+
+                        <div class="relative">
+                            <input type="password" id="newVaultPass" placeholder="Nueva Llave Maestra" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none text-sm font-mono pr-10" required>
+                            <button type="button" class="toggle-pass absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-amber-600 cursor-pointer">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <div id="req-vault" class="mt-2 space-y-1 pl-1 hidden"></div>
                         </div>
-                        <button type="submit" id="btnChangeVault" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition text-sm shadow-sm">
+
+                        <button type="submit" id="btnChangeVault" disabled class="w-full py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition text-sm shadow-sm mt-4">
                             Re-Cifrar Bóveda
                         </button>
                     </form>
@@ -104,118 +127,207 @@ export class SettingsManager {
       </div>
     `;
   }
-  // (Mantén los setupEventListeners exactamente igual que tu código original, la lógica no cambia)
-  // 🚨 ESTA ES LA FUNCIÓN CRÍTICA QUE ESTABA INCOMPLETA 🚨
+
   setupEventListeners() {
+    // --- 1. Lógica de "Ojitos" (Visibilidad) Global ---
+    document.querySelectorAll(".toggle-pass").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const input = btn.previousElementSibling;
+        if (input) {
+          const type =
+            input.getAttribute("type") === "password" ? "text" : "password";
+          input.setAttribute("type", type);
+          const icon = btn.querySelector("i");
+          icon.classList.toggle("fa-eye");
+          icon.classList.toggle("fa-eye-slash");
+        }
+      });
+    });
+
+    // --- 2. Validadores de Complejidad (NIST) ---
+    // Función helper para generar el HTML de requisitos
+    const renderRequirements = (containerId) => {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = `
+        <p class="text-xs text-slate-400 flex items-center gap-2 transition-colors" data-req="length"><i class="fas fa-lock-open text-[10px] w-3 text-center"></i> 8+ caracteres</p>
+        <p class="text-xs text-slate-400 flex items-center gap-2 transition-colors" data-req="upper"><i class="fas fa-lock-open text-[10px] w-3 text-center"></i> Mayúscula</p>
+        <p class="text-xs text-slate-400 flex items-center gap-2 transition-colors" data-req="lower"><i class="fas fa-lock-open text-[10px] w-3 text-center"></i> Minúscula</p>
+        <p class="text-xs text-slate-400 flex items-center gap-2 transition-colors" data-req="number"><i class="fas fa-lock-open text-[10px] w-3 text-center"></i> Número</p>
+        <p class="text-xs text-slate-400 flex items-center gap-2 transition-colors" data-req="symbol"><i class="fas fa-lock-open text-[10px] w-3 text-center"></i> Símbolo (!@#$)</p>
+      `;
+    };
+
+    renderRequirements("req-access");
+    renderRequirements("req-vault");
+
+    // Función de validación reutilizable
+    const setupValidator = (inputId, reqContainerId, btnId) => {
+      const input = document.getElementById(inputId);
+      const container = document.getElementById(reqContainerId);
+      const btn = document.getElementById(btnId);
+
+      if (!input || !container || !btn) return;
+
+      input.addEventListener("input", () => {
+        const val = input.value;
+        container.classList.remove("hidden"); // Mostrar al escribir
+
+        const checks = {
+          length: val.length >= 8,
+          upper: /[A-Z]/.test(val),
+          lower: /[a-z]/.test(val),
+          number: /[0-9]/.test(val),
+          symbol: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(val),
+        };
+
+        let allValid = true;
+        for (const [key, isValid] of Object.entries(checks)) {
+          const el = container.querySelector(`[data-req="${key}"]`);
+          const icon = el.querySelector("i");
+          if (isValid) {
+            el.classList.remove("text-slate-400");
+            el.classList.add("text-emerald-600", "font-medium");
+            icon.className =
+              "fas fa-lock text-emerald-500 text-[10px] w-3 text-center transform scale-110";
+          } else {
+            el.classList.add("text-slate-400");
+            el.classList.remove("text-emerald-600", "font-medium");
+            icon.className =
+              "fas fa-lock-open text-red-400 text-[10px] w-3 text-center";
+            allValid = false;
+          }
+        }
+        btn.disabled = !allValid;
+      });
+    };
+
+    // Activamos validadores para ambos formularios
+    setupValidator("newAccessPass", "req-access", "btnChangeAccess");
+    setupValidator("newVaultPass", "req-vault", "btnChangeVault");
+
+    // --- 3. Lógica de Restauración con "Legacy Password" ---
     const fileInput = document.getElementById("fileImport");
     const btnRestore = document.getElementById("btnRestore");
     const btnExport = document.getElementById("btnExport");
-    const btnChooseFile = document.getElementById("btnChooseFile");
     const statusDiv = document.getElementById("restoreStatus");
+    const btnChooseFile = document.querySelector(
+      "button[onclick*='fileImport']"
+    ); // Selector auxiliar
 
-    // --- 1. Exportar / Descargar ---
-    btnExport?.addEventListener("click", async () => {
-      if (!encryptionService.isReady()) {
-        if (window.app && window.app.requireEncryption) {
-          window.app.requireEncryption(async () => {
-            await this._handleExport(btnExport);
-          });
-          return;
-        }
-      }
-      await this._handleExport(btnExport);
-    });
-
-    // --- 2. Elegir Archivo ---
-    btnChooseFile?.addEventListener("click", () => fileInput.click());
+    if (btnChooseFile)
+      btnChooseFile.onclick = () =>
+        document.getElementById("fileImport").click();
 
     fileInput?.addEventListener("change", () => {
       if (fileInput.files.length) {
         btnRestore.disabled = false;
-        statusDiv.textContent = `Archivo cargado: ${fileInput.files[0].name}`;
+        statusDiv.textContent = `Archivo: ${fileInput.files[0].name}`;
       } else {
         btnRestore.disabled = true;
         statusDiv.textContent = "";
       }
     });
 
-    // --- 3. Restaurar / Importar ---
+    // LISTENER DE EXPORTAR (Sin cambios lógicos)
+    btnExport?.addEventListener("click", async () => {
+      await this._handleExport(btnExport);
+    });
+
+    // LISTENER DE RESTAURAR (Lógica mejorada)
     btnRestore?.addEventListener("click", async () => {
       const file = fileInput.files[0];
       if (!file) return;
 
       if (!encryptionService.isReady()) {
-        toast.show(
-          "Bóveda bloqueada. Ingresa tu clave maestra primero.",
-          "error"
-        );
+        toast.show("Ingresa tu clave maestra actual primero.", "error");
         return;
       }
 
-      // Desactivar botones durante la restauración
-      btnRestore.disabled = true;
-      btnExport.disabled = true;
-      statusDiv.textContent = "Procesando restauración...";
+      const executeRestore = async (overridePassword = null) => {
+        btnRestore.disabled = true;
+        btnExport.disabled = true;
+        statusDiv.textContent = overridePassword
+          ? "Intentando descifrar con clave antigua..."
+          : "Procesando restauración...";
 
-      try {
-        const result = await backupService.restoreBackup(file);
-
-        toast.show(
-          `✅ Restauración exitosa: ${result.docsRestored} docs y ${result.templatesRestored} plantillas.`,
-          "success"
-        );
-
-        // Redirigir al dashboard para ver los cambios
-        window.location.reload();
-      } catch (error) {
-        console.error("Error de restauración:", error);
-
-        if (error.type === "KEY_MISMATCH") {
-          // El archivo está cifrado con una clave diferente
-          // Lógica avanzada: Aquí deberías solicitar la clave antigua (Legacy Password)
-          // Pero por simplicidad, ahora solo mostramos el error
-          toast.show(
-            "❌ Fallo de cifrado. Este respaldo usa una Llave Maestra diferente. Intenta cambiar tu llave maestra primero.",
-            "error"
+        try {
+          // Si pasamos overridePassword, el servicio debe intentar usar esa para leer el JSON
+          // y luego re-cifrar con la actual.
+          const result = await backupService.restoreBackup(
+            file,
+            overridePassword
           );
-        } else {
+
           toast.show(
-            error.message || "❌ Error desconocido al restaurar el archivo.",
-            "error"
+            `✅ Restauración exitosa: ${result.docsRestored} docs.`,
+            "success"
           );
+          setTimeout(() => window.location.reload(), 1500);
+        } catch (error) {
+          console.error("Restore failed:", error);
+
+          // 🚨 DETECCIÓN DE CLAVE INCORRECTA
+          if (
+            error.type === "KEY_MISMATCH" ||
+            error.message.includes("mac check failed") ||
+            error.message.includes("signature")
+          ) {
+            // Si ya estábamos intentando con una override, falló definitivamente
+            if (overridePassword) {
+              toast.show(
+                "❌ La clave antigua proporcionada no es válida.",
+                "error"
+              );
+            } else {
+              // Primera vez fallando: Preguntamos al usuario
+              const prompt = new PasswordPrompt(async (legacyPass) => {
+                // Reintentamos recursivamente con la password introducida
+                await executeRestore(legacyPass);
+                return true; // Cierra el modal
+              }, "Respaldo Antiguo");
+
+              // Ajustamos textos del Prompt para contexto
+              prompt.show();
+              // Pequeño hack para cambiar el texto del modal al vuelo y dar contexto
+              setTimeout(() => {
+                const title = document.querySelector("#passwordPromptModal h3");
+                const desc = document.querySelector("#passwordPromptModal p");
+                if (title) title.textContent = "Respaldo Protegido";
+                if (desc)
+                  desc.innerHTML =
+                    "Este archivo fue cifrado con una <strong>clave diferente</strong>. Ingresa la clave que usabas cuando creaste este respaldo.";
+              }, 50);
+            }
+          } else {
+            toast.show(error.message || "Error al restaurar.", "error");
+          }
+        } finally {
+          btnRestore.disabled = false;
+          btnExport.disabled = false;
+          statusDiv.textContent = "";
         }
-      } finally {
-        btnRestore.disabled = false;
-        btnExport.disabled = false;
-        statusDiv.textContent = "";
-      }
+      };
+
+      await executeRestore(); // Primer intento (con clave actual)
     });
 
-    // --- 4. Formulario de Cambio de Contraseña de Acceso (Login) ---
+    // --- 4. Submits de Formularios (Igual que antes pero sin confirmPass) ---
     document
       .getElementById("changeAccessPassForm")
       ?.addEventListener("submit", async (e) => {
         e.preventDefault();
         const currentPass = document.getElementById("currentAccessPass").value;
         const newPass = document.getElementById("newAccessPass").value;
-
         try {
-          // Asume que authService tiene un método changeAccessPassword
           await authService.changeAccessPassword(newPass, currentPass);
-          toast.show(
-            "✅ Contraseña de acceso actualizada. Vuelve a iniciar sesión.",
-            "success"
-          );
-          authService.logout(); // Fuerza el re-login
+          toast.show("✅ Login actualizado. Reiniciando...", "success");
+          setTimeout(() => authService.logout(), 1000);
         } catch (err) {
-          toast.show(
-            err.message || "❌ Error al actualizar contraseña de acceso",
-            "error"
-          );
+          toast.show(err.message, "error");
         }
       });
 
-    // --- 5. Formulario de Re-Cifrado (Llave Maestra) ---
     document
       .getElementById("changeVaultPassForm")
       ?.addEventListener("submit", async (e) => {
@@ -223,67 +335,47 @@ export class SettingsManager {
         const currentVaultPass =
           document.getElementById("currentVaultPass").value;
         const newVaultPass = document.getElementById("newVaultPass").value;
-        const confirmVaultPass =
-          document.getElementById("confirmVaultPass").value;
 
-        if (newVaultPass !== confirmVaultPass) {
-          toast.show("Las nuevas llaves maestras no coinciden.", "error");
-          return;
-        }
+        // Validamos visualmente que el botón no esté disabled,
+        // pero doble check aquí por seguridad
+        if (document.getElementById("btnChangeVault").disabled) return;
 
         const btn = document.getElementById("btnChangeVault");
         btn.disabled = true;
         btn.textContent = "Re-cifrando...";
 
         try {
-          // Asume que un servicio gestiona el re-cifrado
-          // Esto requiere: 1. Validar la llave actual. 2. Re-derivar Salt/Verifier. 3. Re-cifrar TODOS los documentos.
           await authService.reEncryptVault(currentVaultPass, newVaultPass);
-
-          toast.show(
-            "✅ ¡Bóveda re-cifrada con éxito! La nueva llave maestra está activa.",
-            "success"
-          );
-
-          // Forzar el re-lock de la bóveda para usar la nueva clave
+          toast.show("✅ Bóveda re-cifrada. Reiniciando...", "success");
           encryptionService.lock();
-          window.location.reload();
+          setTimeout(() => window.location.reload(), 1000);
         } catch (err) {
-          toast.show(
-            err.message || "❌ Error en el re-cifrado de la bóveda.",
-            "error"
-          );
-        } finally {
+          toast.show(err.message, "error");
           btn.disabled = false;
           btn.textContent = "Re-Cifrar Bóveda";
         }
       });
   }
 
-  // Helper para manejar la exportación (con o sin re-prompt de encriptación)
+  // Helper _handleExport se mantiene igual
   async _handleExport(btn) {
     if (!encryptionService.isReady()) {
-      toast.show(
-        "Bóveda bloqueada. Ingresa tu clave maestra para exportar.",
-        "error"
-      );
+      if (window.app && window.app.requireEncryption) {
+        window.app.requireEncryption(() => this._handleExport(btn));
+      }
       return;
     }
-
     btn.disabled = true;
-    btn.innerHTML =
-      '<span class="w-4 h-4 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-brand-50 transition-colors"><i class="fas fa-spinner fa-spin text-xs"></i></span> Descargando...';
-
+    const oldHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
     try {
       const result = await backupService.createBackup();
-      toast.show(`✅ Respaldo creado: ${result.count} documentos.`, "success");
+      toast.show(`✅ Respaldo descargado (${result.count} docs).`, "success");
     } catch (e) {
-      console.error("Export Error:", e);
-      toast.show("❌ Error al generar el respaldo.", "error");
+      toast.show("Error exportando.", "error");
     } finally {
       btn.disabled = false;
-      btn.innerHTML =
-        '<span class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-brand-50 transition-colors"><i class="fas fa-download text-xs"></i></span> Descargar Copia Cifrada';
+      btn.innerHTML = oldHtml;
     }
   }
 }
