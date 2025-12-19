@@ -1,5 +1,4 @@
-// src/components/templates/config/AbstractFieldConfig.js
-import { getFieldTypesConfig } from "../../../utils/field-types-config.js";
+import { ElementRegistry } from "../../elements/ElementRegistry.js";
 
 export class AbstractFieldConfig {
   /**
@@ -78,12 +77,12 @@ export class AbstractFieldConfig {
    * Helper para renderizar las opciones del select de tipos.
    */
   renderTypeOptions() {
-    const types = getFieldTypesConfig();
+    const types = ElementRegistry.getAvailableTypes();
     return types
       .map(
         (t) =>
-          `<option value="${t.value}" ${
-            this.data.type === t.value ? "selected" : ""
+          `<option value="${t.type}" ${
+            this.data.type === t.type ? "selected" : ""
           }>${t.label}</option>`
       )
       .join("");

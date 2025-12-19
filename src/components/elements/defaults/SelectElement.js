@@ -14,7 +14,7 @@ export class SelectElement extends BaseElement {
     return "Menú desplegable.";
   }
 
-  renderSettings() {
+  renderTemplate() {
     // Necesitamos definir las opciones en el template
     const opts =
       this.def.settings && this.def.settings.options

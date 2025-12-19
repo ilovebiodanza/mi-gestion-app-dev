@@ -22,7 +22,7 @@ export class TableElement extends BaseElement {
     this.columns = def.columns || [];
   }
 
-  renderSettings() {
+  renderTemplate() {
     return `<div class="p-2 bg-amber-50 text-amber-700 text-xs rounded border border-amber-200">
         Las columnas de la tabla se configuran en el editor avanzado.
     </div>`;

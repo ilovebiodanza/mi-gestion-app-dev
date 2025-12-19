@@ -1,7 +1,3 @@
-// src/components/templates/TemplateFormRenderers.js
-import { generateFieldId } from "../../utils/helpers.js";
-import { getFieldTypesConfig } from "../../utils/field-types-config.js";
-
 /**
  * Renderiza la estructura principal del formulario de plantilla.
  */

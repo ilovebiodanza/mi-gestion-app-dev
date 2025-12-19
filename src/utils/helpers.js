@@ -1,5 +1,5 @@
 // src/utils/helpers.js
-import { getFieldTypeMetadata } from "./field-types-config.js";
+import { ElementRegistry } from "../components/elements/ElementRegistry.js";
 
 // --- Configuración Regional ---
 export const idiomasYMonedas = {
@@ -111,13 +111,10 @@ export const getCategoryIcon = (category) => {
 };
 
 export const getFieldTypeLabel = (type) => {
-  const metadata = getFieldTypeMetadata(type);
-  return metadata ? metadata.label : type;
+  // ANTES: const metadata = getFieldTypeMetadata(type); return metadata ? metadata.label : type;
+  // AHORA:
+  return ElementRegistry.get(type).getLabel();
 };
-
-// src/utils/helpers.js
-
-// ... (resto del archivo igual) ...
 
 export const detectMediaType = (url) => {
   if (!url || typeof url !== "string") return "link";

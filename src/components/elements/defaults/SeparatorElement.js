@@ -13,7 +13,7 @@ export class SeparatorElement extends BaseElement {
   }
 
   // 1. Template: Solo pide el texto del título
-  renderSettings() {
+  renderTemplate() {
     return `<p class="text-xs text-slate-500">Este elemento crea una división visual.</p>`;
   }
 

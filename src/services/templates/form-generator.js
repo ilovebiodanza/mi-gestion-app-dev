@@ -1,5 +1,5 @@
 // src/services/templates/form-generator.js
-import { getFieldTypeMetadata } from "../../utils/field-types-config.js";
+import { ElementRegistry } from "../../components/elements/ElementRegistry.js";
 
 /**
  * Servicio para generar la representación HTML/DOM con estilos Tailwind Nativos
@@ -13,13 +13,15 @@ class TemplateFormGenerator {
     if (!field || !field.type)
       return `<p class="text-red-500 text-xs">Error: Campo sin tipo.</p>`;
 
+    // Consumimos el Registry para validar o preparar el uso futuro, aunque por ahora
+    // mantenemos la lógica de renderizado condicional explícita.
+    const ElementClass = ElementRegistry.get(field.type);
+
     const requiredAttr = field.required ? "required" : "";
-    const metadata = getFieldTypeMetadata(field.type);
-    let inputType = metadata?.inputType || "text";
     let inputHtml = "";
 
     // --- SEPARADOR ---
-    if (inputType === "separator") {
+    if (field.type === "separator") {
       return `
             <div class="col-span-1 md:col-span-2 mt-6 mb-2 group animate-fade-in">
                 <div class="flex items-center gap-4">
@@ -30,8 +32,8 @@ class TemplateFormGenerator {
         `;
     }
 
-    // 1. Checkbox
-    if (inputType === "checkbox") {
+    // 1. Checkbox (Boolean)
+    if (field.type === "boolean") {
       inputHtml = `
         <div class="flex items-center h-full min-h-[50px]">
           <label class="relative inline-flex items-center cursor-pointer group">
@@ -44,8 +46,8 @@ class TemplateFormGenerator {
           </label>
         </div>`;
     }
-    // 2. Textarea
-    else if (inputType === "textarea") {
+    // 2. Textarea (Texto Largo)
+    else if (field.type === "text") {
       inputHtml = `<textarea id="${field.id}" name="${field.id}" rows="4"
         class="${this.inputBaseClass} resize-y" 
         placeholder="${
@@ -53,7 +55,7 @@ class TemplateFormGenerator {
         }" ${requiredAttr}>${currentValue}</textarea>`;
     }
     // 3. URL
-    else if (inputType === "url") {
+    else if (field.type === "url") {
       let urlVal =
         currentValue?.url ||
         (typeof currentValue === "string" ? currentValue : "");
@@ -75,7 +77,7 @@ class TemplateFormGenerator {
         `;
     }
     // 4. Select
-    else if (inputType === "select") {
+    else if (field.type === "select") {
       const optionsHtml = (field.options || [])
         .map(
           (opt) =>
@@ -98,8 +100,8 @@ class TemplateFormGenerator {
           <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400"><i class="fas fa-chevron-down text-xs"></i></div>
         </div>`;
     }
-    // 5. Tabla (AQUÍ ESTÁ LA CORRECCIÓN CRÍTICA)
-    else if (inputType === "table") {
+    // 5. Tabla
+    else if (field.type === "table") {
       const headers = (field.columns || [])
         .map(
           (c) =>
@@ -109,8 +111,6 @@ class TemplateFormGenerator {
 
       const rowsData = Array.isArray(currentValue) ? currentValue : [];
 
-      // FIX: Escapamos las comillas dobles para que el JSON no rompa el atributo HTML value="..."
-      // Esto convierte {"a":"b"} en {&quot;a&quot;:&quot;b&quot;}
       const safeJson = JSON.stringify(rowsData).replace(/"/g, "&quot;");
 
       inputHtml = `
@@ -154,11 +154,13 @@ class TemplateFormGenerator {
         </script>
       `;
     }
-    // 7. Inputs estándar
+    // 7. Inputs estándar (String, Number, Currency, Percentage, Date, Email)
     else {
-      let finalType = ["number", "currency", "percentage"].includes(field.type)
-        ? "text"
-        : inputType;
+      let finalType = "text";
+      if (field.type === "email") finalType = "email";
+      else if (field.type === "date") finalType = "date";
+      // Para 'string', 'number', 'currency', 'percentage' usamos 'text' por defecto
+
       let icon = "";
       let extraClasses = "";
       if (field.type === "email") icon = "fa-envelope";
@@ -172,6 +174,10 @@ class TemplateFormGenerator {
       } else if (field.type === "number") {
         icon = "fa-hashtag";
         extraClasses = "font-mono text-right";
+      } else if (field.type === "string") {
+        // Aseguramos que el tipo string tenga su icono por defecto si no lo tiene
+        // Opcional: icon = "fa-font";
+        // El código original no asignaba icono explícito en el else if chain para string, dependía del inputType genérico
       }
 
       const iconHtml = icon
@@ -191,7 +197,7 @@ class TemplateFormGenerator {
       "table",
       "text",
       "url",
-      "textarea",
+      "textarea", // Mantenido por compatibilidad aunque ahora se controla por field.type 'text'
       "separator",
     ].includes(field.type);
     const layoutClass = isFullWidth ? "md:col-span-2" : "md:col-span-1";
@@ -199,7 +205,7 @@ class TemplateFormGenerator {
     return `
       <div class="field-wrapper ${layoutClass} group animate-fade-in-up">
         ${
-          inputType !== "separator"
+          field.type !== "separator"
             ? `<label for="${
                 field.id
               }" class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 ml-1 flex items-center justify-between"><span>${

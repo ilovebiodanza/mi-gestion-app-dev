@@ -23,7 +23,7 @@ export class BaseElement {
   }
 
   // --- 1. PROCESO TEMPLATE (Configuración) ---
-  renderSettings() {
+  renderTemplate() {
     return ""; // Por defecto no hay configuración extra
   }
 

@@ -14,7 +14,7 @@ export class TextElement extends BaseElement {
     return "Descripciones detalladas o párrafos.";
   }
 
-  renderSettings() {
+  renderTemplate() {
     return `
       <div class="flex items-center gap-2 mt-2">
         <input type="checkbox" name="richText" disabled checked class="accent-brand-600"> 

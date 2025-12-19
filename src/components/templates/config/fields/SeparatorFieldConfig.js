@@ -1,6 +1,4 @@
 import { AbstractFieldConfig } from "../AbstractFieldConfig.js";
-import { getFieldTypesConfig } from "../../../../utils/field-types-config.js";
-
 export class SeparatorFieldConfig extends AbstractFieldConfig {
   /**
    * Sobrescribimos render() completamente porque el Separador es visualmente muy distinto.

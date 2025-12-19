@@ -14,7 +14,7 @@ export class StringElement extends BaseElement {
     return "Nombres, títulos o datos cortos.";
   }
 
-  renderSettings() {
+  renderTemplate() {
     return `
       <div class="flex flex-col gap-2">
         <label class="text-[10px] font-bold text-slate-400 uppercase">Placeholder (Pista)</label>

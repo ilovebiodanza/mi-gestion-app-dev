@@ -1,7 +1,4 @@
-// src/services/templates/template-builder.js
-
-// Importación de la configuración centralizada
-import { getFieldTypesConfig } from "../../utils/field-types-config.js";
+import { ElementRegistry } from "../../components/elements/ElementRegistry.js";
 
 /**
  * Servicio para construir, definir y validar la estructura de plantillas y campos.
@@ -11,8 +8,7 @@ class TemplateBuilder {
    * Obtener tipos de campo válidos dinámicamente desde la configuración.
    */
   getValidFieldTypes() {
-    // Extraemos solo los 'value' (ej: 'string', 'table', 'secret')
-    return getFieldTypesConfig().map((type) => type.value);
+    return ElementRegistry.getAvailableTypes().map((t) => t.type);
   }
 
   /**
