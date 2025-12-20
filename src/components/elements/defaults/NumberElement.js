@@ -81,8 +81,8 @@ export class NumberElement extends BaseElement {
           </button>
 
           <ul id="list-menu-${this.def.id}" 
-              class="hidden absolute right-0 w-64 bg-white border border-slate-200 shadow-xl rounded-lg z-50 overflow-hidden max-h-60 overflow-y-auto">
-              </ul>
+              class="hidden fixed bg-white border border-slate-200 shadow-2xl rounded-xl z-[9999] overflow-hidden max-h-[70vh] w-72 overflow-y-auto">
+          </ul>
         </div>
 
         <div class="text-[10px] text-slate-400 px-1 hidden md:block text-right">
@@ -99,8 +99,7 @@ export class NumberElement extends BaseElement {
 
     if (!input) return;
 
-    // --- 1. LÓGICA DE ALINEACIÓN Y CÁLCULO (Existente) ---
-
+    // --- 1. LÓGICA DE ALINEACIÓN Y CÁLCULO ---
     const evaluateExpression = (expr) => {
       if (/[^0-9+\-*/().\s,]/.test(expr)) return null;
       try {
@@ -149,7 +148,7 @@ export class NumberElement extends BaseElement {
     input.addEventListener("blur", () => {
       input.classList.remove("text-left");
       input.classList.add("text-right");
-      processValue(); // Calculamos al salir
+      processValue();
     });
 
     input.addEventListener("keydown", (e) => {
@@ -159,45 +158,36 @@ export class NumberElement extends BaseElement {
       }
     });
 
-    // --- 2. LÓGICA DEL MENÚ DE CAMPOS (Nueva Funcionalidad) ---
-
-    // Función para cerrar el menú
+    // --- 2. LÓGICA DEL MENÚ DE CAMPOS ---
     const closeMenu = () => {
       if (!listMenu.classList.contains("hidden")) {
         listMenu.classList.add("hidden");
-        // Limpiamos eventos globales para no acumular basura
         document.removeEventListener("click", outsideClickListener);
         document.removeEventListener("keydown", escapeListener);
       }
     };
 
-    // Listener para cerrar con Escape
     const escapeListener = (e) => {
       if (e.key === "Escape") closeMenu();
     };
 
-    // Listener para cerrar al hacer click fuera
     const outsideClickListener = (e) => {
       if (!listMenu.contains(e.target) && !listBtn.contains(e.target)) {
         closeMenu();
       }
     };
 
-    // Función para mostrar el menú
     const openMenu = () => {
-      // 1. Encontrar todos los inputs numéricos (js-number-input)
+      // Instrucción solicitada para encontrar inputs con clase js-number-input
       const allInputs = Array.from(
         document.querySelectorAll("input.js-number-input")
       );
 
-      // Filtrar el propio input actual y aquellos sin valor
       const sources = allInputs
         .filter(
           (el) => el.id !== input.id && el.value && !isNaN(parseFloat(el.value))
         )
         .map((el) => {
-          // Intentar encontrar el label asociado:
-          // Buscamos el contenedor padre más cercano con [data-field-id] y luego el label dentro
           const parent = el.closest("[data-field-id]");
           const labelEl = parent ? parent.querySelector("label") : null;
           const labelText = labelEl
@@ -211,13 +201,23 @@ export class NumberElement extends BaseElement {
           };
         });
 
-      // 2. Construir HTML de la lista
+      // Encabezado del menú para mayor claridad
+      const headerHtml = `
+        <div class="bg-slate-50 px-3 py-2 border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase flex justify-between items-center">
+            <span>Sugerencias</span>
+            <span class="text-[9px] text-slate-300 italic">ESC cerrar</span>
+        </div>`;
+
       if (sources.length === 0) {
-        listMenu.innerHTML = `<li class="px-4 py-3 text-xs text-slate-400 text-center italic">No hay otros valores numéricos disponibles.</li>`;
+        listMenu.innerHTML =
+          headerHtml +
+          `<li class="px-4 py-3 text-xs text-slate-400 text-center italic">No hay otros valores disponibles.</li>`;
       } else {
-        listMenu.innerHTML = sources
-          .map(
-            (item) => `
+        listMenu.innerHTML =
+          headerHtml +
+          sources
+            .map(
+              (item) => `
           <li class="border-b border-slate-100 last:border-0">
             <button type="button" 
                     data-val="${item.value}" 
@@ -229,57 +229,30 @@ export class NumberElement extends BaseElement {
                 ${item.value}
               </span>
             </button>
-          </li>
-        `
-          )
-          .join("");
+          </li>`
+            )
+            .join("");
       }
 
-      // 3. Añadir listeners a los items generados
+      // --- POSICIONAMIENTO FIXED (ALTA IZQUIERDA) ---
+      listMenu.classList.remove("hidden");
+      listMenu.style.bottom = "10px";
+      listMenu.style.left = "10px";
+
       listMenu.querySelectorAll("button").forEach((btn) => {
         btn.onclick = (e) => {
-          e.stopPropagation(); // Evitar cerrar inmediatamente
+          e.stopPropagation();
           const valToAdd = btn.dataset.val;
-
-          // Lógica de inserción: Si ya hay valor, agregar " + VAL", si no, poner "VAL"
-          if (input.value) {
-            input.value = `${input.value} + ${valToAdd}`;
-          } else {
-            input.value = valToAdd;
-          }
-
-          // Efecto visual y cierre
-          input.focus(); // Esto alineará a la izquierda automáticamente
+          input.value = input.value ? `${input.value} + ${valToAdd}` : valToAdd;
+          input.focus();
           closeMenu();
         };
       });
 
-      // 4. Posicionamiento (Arriba o Abajo según espacio)
-      listMenu.classList.remove(
-        "hidden",
-        "bottom-full",
-        "top-full",
-        "mb-1",
-        "mt-1"
-      );
-
-      const rect = input.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-
-      // Preferencia: Arriba (bottom-full) si hay espacio (> 250px), si no, Abajo
-      if (spaceBelow > 200) {
-        listMenu.classList.add("top-full", "mt-1");
-      } else {
-        listMenu.classList.add("bottom-full", "mb-1");
-      }
-
-      // 5. Activar listeners globales de cierre
       document.addEventListener("click", outsideClickListener);
       document.addEventListener("keydown", escapeListener);
     };
 
-    // Click en el botón de lista
     if (listBtn) {
       listBtn.onclick = (e) => {
         e.stopPropagation();

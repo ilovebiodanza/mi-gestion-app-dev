@@ -28,6 +28,8 @@ class FieldRegistry {
         "string",
         "text",
         "number",
+        "percentage",
+        "currency",
       ].includes(fieldDef.type) &&
       NewElementClass
     ) {
