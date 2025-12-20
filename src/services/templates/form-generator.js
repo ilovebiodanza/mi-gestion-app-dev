@@ -1,5 +1,7 @@
 // src/services/templates/form-generator.js
 import { ElementRegistry } from "../../components/elements/ElementRegistry.js";
+// MANTENEMOS la importación vieja por ahora para los otros campos (si la usas para metadata)
+// import { getFieldTypeMetadata } from "../../utils/field-types-config.js";
 
 /**
  * Servicio para generar la representación HTML/DOM con estilos Tailwind Nativos
@@ -12,6 +14,28 @@ class TemplateFormGenerator {
   renderField(field, currentValue = "") {
     if (!field || !field.type)
       return `<p class="text-red-500 text-xs">Error: Campo sin tipo.</p>`;
+
+    // ============================================================
+    if (field.type === "string") {
+      try {
+        const ElementClass = ElementRegistry.get(field.type);
+        const element = new ElementClass(field, currentValue);
+
+        const { columns, html } = element.renderEditor();
+        const wrapperClass = "md:col-span-" + columns; // String siempre es media columna
+
+        // Retornamos directamente el resultado del Elemento Nuevo
+        return `
+              <div class="field-wrapper ${wrapperClass} group animate-fade-in-up mb-4" 
+                   data-field-id="${field.id}" data-field-type="string">
+                ${html}
+                </div>
+            `;
+      } catch (e) {
+        console.error("Error en nuevo sistema string:", e);
+        // Si falla, dejamos que continúe hacia abajo al sistema viejo como fallback
+      }
+    }
 
     // Consumimos el Registry para validar o preparar el uso futuro, aunque por ahora
     // mantenemos la lógica de renderizado condicional explícita.

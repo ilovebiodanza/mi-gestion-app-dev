@@ -5,6 +5,8 @@ import { copyToWhatsApp } from "./WhatsAppExporter.js";
 import { printDocument } from "./PrintExporter.js";
 import { getLocalCurrency } from "../../utils/helpers.js";
 import { globalPlayer } from "../common/MediaPlayer.js";
+import { ElementRegistry } from "../elements/ElementRegistry.js";
+// Mantienes ViewerRegistry para los campos viejos
 import { ViewerRegistry } from "./core/ViewerRegistry.js";
 
 export class DocumentViewer {
@@ -114,6 +116,23 @@ export class DocumentViewer {
       return fields
         .map((field) => {
           const value = this.decryptedData[field.id];
+          let viewerHtml = "";
+
+          // ============================================================
+          // 🟢 ZONA NUEVA: Intercepción para 'string'
+          // ============================================================
+          if (field.type === "string") {
+            try {
+              const ElementClass = ElementRegistry.get(field.type);
+              // Instanciamos el elemento nuevo
+              const element = new ElementClass(field, value);
+              // Obtenemos el HTML homologado
+              viewerHtml = element.renderViewer();
+            } catch (e) {
+              console.error("Error en renderizado nuevo (string):", e);
+              // Si falla, viewerHtml sigue vacío y caerá en la lógica vieja
+            }
+          }
 
           // 1. INSTANCIAR EL VIEWER
           const ViewerClass = ViewerRegistry.getViewerClass(field.type);

@@ -93,7 +93,17 @@ export class AbstractFieldConfig {
    * (ej: opciones de select, botón de tabla, etc).
    */
   renderSpecificSettings() {
-    return "";
+    try {
+      const ElementClass = ElementRegistry.get(this.data.type);
+      // Instanciamos solo con la definición (value es null en configuración)
+      const element = new ElementClass(this.data, null);
+
+      // Si el elemento tiene renderSettings, lo usamos. Si no, string vacío.
+      return element.renderSettings ? element.renderSettings() : "";
+    } catch (e) {
+      console.warn(`Error renderizando settings para ${this.data.type}`, e);
+      return "";
+    }
   }
 
   /**
@@ -146,8 +156,22 @@ export class AbstractFieldConfig {
   /**
    * Método polimórfico para listeners específicos.
    */
+  // MODIFICAR: Delegación de Listeners
   attachSpecificListeners() {
-    // Override me
+    try {
+      const ElementClass = ElementRegistry.get(this.data.type);
+      const element = new ElementClass(this.data, null);
+
+      if (element.postRenderSettings) {
+        // Pasamos un callback para actualizar this.data de forma segura
+        element.postRenderSettings(this.domElement, (key, value) => {
+          this.data[key] = value;
+          this.notifyChange(); // Importante: avisa al formulario principal que hubo cambios
+        });
+      }
+    } catch (e) {
+      console.warn(`Error adjuntando listeners para ${this.data.type}`, e);
+    }
   }
 
   notifyChange() {
