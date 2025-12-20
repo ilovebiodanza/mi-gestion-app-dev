@@ -30,14 +30,13 @@ class FieldRegistry {
         "number",
         "percentage",
         "currency",
+        "table",
       ].includes(fieldDef.type) &&
       NewElementClass
     ) {
       // console.log({ fieldDef, initialValue, onChange });
 
-      console.log(
-        `Migrando tipo: ${fieldDef.type} a ElementRegistry vía Adaptador`
-      );
+      //      console.log(`Migrando tipo: ${fieldDef.type} a ElementRegistry vía Adaptador`);
       return new ElementAdapter(NewElementClass, fieldDef, initialValue);
     }
 

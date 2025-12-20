@@ -43,14 +43,14 @@ export class TableElement extends BaseElement {
     const headers = this.columns
       .map(
         (c) =>
-          `<th class="px-4 py-2 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell border-b border-slate-200">${c.label}</th>`
+          `<th class="px-4 py-2 text-left text-xs font-bold text-slate-500 uppercase tracking-wider hidden md:table-cell border-b border-slate-200" data-type="${c.type}">${c.label}</th>`
       )
       .join("");
 
     const rowsHtml = this._renderEditorRows();
 
     return `
-      <div class="table-element-container border border-slate-200 rounded-xl overflow-hidden bg-white mt-2">
+      <div class="table-element-container border border-slate-200 rounded-xl overflow-hidden bg-white mt-2 col-span-full flex flex-col gap-1">
         <div class="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
             <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                 <i class="fas fa-table"></i> ${this.def.label}
@@ -109,8 +109,14 @@ export class TableElement extends BaseElement {
             }
 
             return `
-            <td class="block md:table-cell px-4 py-2 md:py-3 align-top text-sm border-b md:border-none border-slate-100 last:border-0">
-                <span class="md:hidden block text-[10px] font-bold text-slate-400 uppercase mb-1">${col.label}</span>
+            <td class="block md:table-cell px-4 py-2 md:py-3 align-top text-sm border-b md:border-none border-slate-100 last:border-0"${
+              ["number", "percentage", "currency"].includes(col.type)
+                ? ` data-col-value="${row[col.id]}"`
+                : ``
+            }>
+                <span class="md:hidden block text-[10px] font-bold text-slate-400 uppercase mb-1">${
+                  col.label
+                }</span>
                 <div class="text-slate-700 font-medium break-words truncate max-w-[200px]">${displayHtml}</div>
             </td>`;
           })
