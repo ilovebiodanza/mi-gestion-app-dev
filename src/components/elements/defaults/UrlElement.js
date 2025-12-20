@@ -55,6 +55,8 @@ export class UrlElement extends BaseElement {
       val = this.value || "";
     }
 
+    console.log(this.def);
+
     const inputClasses =
       "block w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none text-blue-600";
 
@@ -66,7 +68,7 @@ export class UrlElement extends BaseElement {
            <span>${this.def.label}</span>${requiredBadge}
         </label>
 
-        <div class="relative group/std">
+        <div class="relative">
            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within/std:text-primary transition-colors">
               <i class="fas fa-link"></i>
            </div>
@@ -78,6 +80,12 @@ export class UrlElement extends BaseElement {
               class="${inputClasses}" 
               placeholder="${this.def.placeholder || "https://..."}">
         </div>
+        <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within/std:text-primary transition-colors"">
+                  <i class="fas fa-font text-xs"></i>
+              </div>
+              <input type="text" class="text-input w-full bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm px-3 py-2 pl-8 text-slate-700 placeholder-slate-400 font-medium" placeholder="">
+          </div>
       </div>`;
   }
 

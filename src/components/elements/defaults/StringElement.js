@@ -40,9 +40,6 @@ export class StringElement extends BaseElement {
     const inputClasses =
       "block w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none";
 
-    // CORRECCIÓN:
-    // 1. Agregado 'flex flex-col' al wrapper para forzar la verticalidad (etiqueta arriba, input abajo).
-    // 2. Agregado 'id="${this.def.id}"' al input para que FormManager pueda leerlo y no falle al guardar.
     return `
       <div class="field-wrapper flex flex-col mb-4 md:col-span-1 print:col-span-1" data-field-id="${
         this.def.id

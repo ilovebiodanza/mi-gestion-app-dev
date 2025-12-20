@@ -1,4 +1,6 @@
 // src/components/editor/core/FieldRegistry.js
+import { ElementRegistry } from "../../elements/ElementRegistry.js";
+import { ElementAdapter } from "./ElementAdapter.js";
 
 class FieldRegistry {
   constructor() {
@@ -9,16 +11,36 @@ class FieldRegistry {
     this.types[type] = classRef;
   }
 
-  /**
-   * Crea una instancia del controlador adecuado
-   */
   createController(fieldDef, initialValue, onChange) {
-    const FieldClass = this.types[fieldDef.type] || this.types["string"]; // Fallback a string
-    if (!FieldClass) {
-      throw new Error(
-        `No hay controlador registrado para el tipo: ${fieldDef.type}`
+    // 1. Intentar obtener el elemento del nuevo sistema (ElementRegistry)
+    const NewElementClass = ElementRegistry.get(fieldDef.type);
+
+    // Verificamos si es un elemento real y no el fallback por defecto (o si es el que queremos probar)
+    // En este caso, forzamos el uso del adaptador si el tipo es 'boolean'
+    if (
+      [
+        "boolean",
+        "date",
+        "email",
+        "secret",
+        "select",
+        "separator",
+        "string",
+        "text",
+        "number",
+      ].includes(fieldDef.type) &&
+      NewElementClass
+    ) {
+      // console.log({ fieldDef, initialValue, onChange });
+
+      console.log(
+        `Migrando tipo: ${fieldDef.type} a ElementRegistry vía Adaptador`
       );
+      return new ElementAdapter(NewElementClass, fieldDef, initialValue);
     }
+
+    // 2. Fallback al sistema Legacy (lo que ya tenías)
+    const FieldClass = this.types[fieldDef.type] || this.types["string"];
     return new FieldClass(fieldDef, initialValue, onChange);
   }
 }
