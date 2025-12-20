@@ -116,21 +116,53 @@ export class DocumentViewer {
       return fields
         .map((field) => {
           const value = this.decryptedData[field.id];
-          let viewerHtml = "";
 
-          // ============================================================
-          // 🟢 ZONA NUEVA: Intercepción para 'string'
-          // ============================================================
-          if (field.type === "string") {
+          // 1. Determinar Columnas usando el Registry (Nuevo Sistema)
+          let colSpanClass = "col-span-1";
+
+          // Intentamos obtener la configuración del Elemento nuevo
+          try {
+            const ElementClass = ElementRegistry.get(field.type);
+            // Si el elemento define getColumns, lo usamos
+            if (ElementClass && typeof ElementClass.getColumns === "function") {
+              const cols = ElementClass.getColumns();
+              colSpanClass =
+                cols === 2 ? "col-span-1 md:col-span-2" : "col-span-1";
+            } else {
+              // Fallback a lógica antigua para elementos no migrados (Tablas, Separadores antiguos)
+              const isFullWidth = ["table", "separator", "url"].includes(
+                field.type
+              );
+              colSpanClass = isFullWidth
+                ? "col-span-1 md:col-span-2"
+                : "col-span-1";
+            }
+          } catch (e) {
+            // Fallback seguro
+            colSpanClass = "col-span-1";
+          }
+
+          // 2. Renderizado del Contenido (Lógica que ya teníamos)
+          let viewerHtml = "";
+          // 🟢 ZONA NUEVA: Intercepción para 'string', 'text' Y 'secret'
+          if (["string", "text", "secret"].includes(field.type)) {
             try {
               const ElementClass = ElementRegistry.get(field.type);
-              // Instanciamos el elemento nuevo
               const element = new ElementClass(field, value);
-              // Obtenemos el HTML homologado
               viewerHtml = element.renderViewer();
+
+              // ⚡ TRUCO DEL ADAPTADOR ⚡
+              // Si el elemento tiene lógica post-render (como SecretElement),
+              // creamos un objeto falso que DocumentViewer guardará en su cache.
+              // Cuando DocumentViewer recorra el cache al final, ejecutará nuestra función.
+              if (typeof element.postRenderViewer === "function") {
+                this.viewersInstanceCache.push({
+                  postRender: (container) =>
+                    element.postRenderViewer(container),
+                });
+              }
             } catch (e) {
-              console.error("Error en renderizado nuevo (string):", e);
-              // Si falla, viewerHtml sigue vacío y caerá en la lógica vieja
+              console.error(`Error en renderizado nuevo (${field.type}):`, e);
             }
           }
 
@@ -151,13 +183,13 @@ export class DocumentViewer {
             </div>`;
           }
 
-          const isFullWidth = ["text", "url"].includes(field.type);
+          /*const isFullWidth = ["text", "url"].includes(field.type); 
           const spanClass = isFullWidth
             ? "col-span-1 md:col-span-2"
-            : "col-span-1";
+            : "col-span-1"; */
 
           return `
-            <div class="${spanClass} group border-b border-slate-100 pb-3 last:border-0 hover:bg-slate-50/50 transition-colors rounded-lg px-2 -mx-2">
+            <div class="${colSpanClass} group border-b border-slate-100 pb-3 last:border-0 hover:bg-slate-50/50 transition-colors rounded-lg px-2 -mx-2">
               <dt class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                  ${field.label}
               </dt>

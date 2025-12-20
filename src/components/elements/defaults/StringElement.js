@@ -40,18 +40,15 @@ export class StringElement extends BaseElement {
     const inputClasses =
       "block w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-sm placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all outline-none";
 
-    return {
-      columns: 1,
-      html: `
+    return `
       <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 ml-1 flex items-center justify-between">
          <span>${this.def.label}</span>${requiredBadge}
       </label>
       <div class="relative group/std">
         <input type="text" id="${this.def.id}" value="${
-        this.value || ""
-      }" class="${inputClasses}" placeholder="${this.def.placeholder || ""}">
-      </div>`,
-    };
+      this.value || ""
+    }" class="${inputClasses}" placeholder="${this.def.placeholder || ""}">
+      </div>`;
   }
 
   postRenderEditor(container, onChange) {

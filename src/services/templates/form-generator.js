@@ -15,25 +15,25 @@ class TemplateFormGenerator {
     if (!field || !field.type)
       return `<p class="text-red-500 text-xs">Error: Campo sin tipo.</p>`;
 
-    // ============================================================
-    if (field.type === "string") {
+    // 🟢 ZONA NUEVA: Intercepción para 'string', 'text' Y 'secret'
+    if (["string", "text", "secret"].includes(field.type)) {
+      // <--- AGREGADO 'secret'
       try {
         const ElementClass = ElementRegistry.get(field.type);
         const element = new ElementClass(field, currentValue);
 
-        const { columns, html } = element.renderEditor();
-        const wrapperClass = "md:col-span-" + columns; // String siempre es media columna
+        const html = element.renderEditor();
+        const columns = ElementClass.getColumns(); // Retorna 1
+        const wrapperClass = columns === 2 ? "md:col-span-2" : "md:col-span-1";
 
-        // Retornamos directamente el resultado del Elemento Nuevo
         return `
               <div class="field-wrapper ${wrapperClass} group animate-fade-in-up mb-4" 
-                   data-field-id="${field.id}" data-field-type="string">
+                   data-field-id="${field.id}" data-field-type="${field.type}">
                 ${html}
-                </div>
+              </div>
             `;
       } catch (e) {
-        console.error("Error en nuevo sistema string:", e);
-        // Si falla, dejamos que continúe hacia abajo al sistema viejo como fallback
+        console.error(`Error en nuevo sistema (${field.type}):`, e);
       }
     }
 
