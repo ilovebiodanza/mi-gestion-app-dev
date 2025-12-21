@@ -2,33 +2,28 @@ import { defineConfig } from "vite";
 import { resolve } from "path";
 
 export default defineConfig({
-  // Asegura rutas relativas para que funcione en GitHub Pages o carpetas locales
-  base: "./",
+  // CAMBIO PRINCIPAL:
+  // Usa '/app/' para que los assets carguen correctamente en producción.
+  // Si usas "./", podrías tener problemas con rutas profundas o navegación.
+  base: "/app/",
 
-  // Define explícitamente la raíz si es necesario, o déjalo por defecto
-  // root: "",
-
-  // Carpeta de estáticos (asegúrate de que tu favicon esté aquí)
   publicDir: "public",
 
   build: {
     outDir: "dist",
     emptyOutDir: true,
-
-    // 🔥 CRÍTICO PARA SEGURIDAD:
-    // Evita generar archivos .map que revelan tu código original
     sourcemap: false,
 
-    // Configuración de Minificación (Terser es más agresivo y seguro)
+    // Asegúrate de tener instalado terser: npm install -D terser
     minify: "terser",
     terserOptions: {
       compress: {
-        drop_console: true, // Elimina console.log
-        drop_debugger: true, // Elimina debugger
-        pure_funcs: ["console.info", "console.debug", "console.warn"], // Limpieza extra
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ["console.info", "console.debug", "console.warn"],
       },
       format: {
-        comments: false, // Elimina comentarios del código
+        comments: false,
       },
     },
 
@@ -37,14 +32,12 @@ export default defineConfig({
         main: resolve(__dirname, "index.html"),
       },
       output: {
-        // Forzar nombres de archivo predecibles o dejar hash (recomendado hash para cache)
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash].[ext]",
       },
     },
 
-    // Aumentar límite de aviso de chunk (la ofuscación aumenta el tamaño)
     chunkSizeWarningLimit: 1500,
   },
   server: {
