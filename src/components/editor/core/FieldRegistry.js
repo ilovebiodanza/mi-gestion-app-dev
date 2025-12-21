@@ -39,7 +39,7 @@ class FieldRegistry {
       //      console.log(`Migrando tipo: ${fieldDef.type} a ElementRegistry vía Adaptador`);
       return new ElementAdapter(NewElementClass, fieldDef, initialValue);
     }
-
+    console.log("***** Todavia por aqui");
     // 2. Fallback al sistema Legacy (lo que ya tenías)
     const FieldClass = this.types[fieldDef.type] || this.types["string"];
     return new FieldClass(fieldDef, initialValue, onChange);

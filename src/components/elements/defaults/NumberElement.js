@@ -96,7 +96,11 @@ export class NumberElement extends BaseElement {
     const listBtn = container.querySelector(`#btn-list-${this.def.id}`);
     const listMenu = container.querySelector(`#list-menu-${this.def.id}`);
 
-    if (!input) return;
+    if (!input || !listMenu) return;
+
+    // --- ESTRATEGIA DE PORTAL ---
+    // Movemos el menú al body para que nada lo oculte (z-index global)
+    document.body.appendChild(listMenu);
 
     const evaluateExpression = (expr) => {
       if (/[^0-9+\-*/().\s,]/.test(expr)) return null;
@@ -138,28 +142,11 @@ export class NumberElement extends BaseElement {
       }
     };
 
-    input.addEventListener("focus", () => {
-      input.classList.remove("text-right");
-      input.classList.add("text-left");
-    });
-
-    input.addEventListener("blur", () => {
-      input.classList.remove("text-left");
-      input.classList.add("text-right");
-      processValue();
-    });
-
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        input.blur();
-      }
-    });
-
     const closeMenu = () => {
       listMenu.classList.add("hidden");
       document.removeEventListener("click", outsideClickListener);
       document.removeEventListener("keydown", escapeListener);
+      window.removeEventListener("scroll", closeMenu); // Cerrar si hay scroll para evitar desalineación
     };
 
     const escapeListener = (e) => {
@@ -171,82 +158,74 @@ export class NumberElement extends BaseElement {
     };
 
     const openMenu = () => {
-      const menuGroups = [];
+      // 1. ELIMINAR OTROS MENÚS ABIERTOS
+      document
+        .querySelectorAll('[id^="list-menu-"]')
+        .forEach((menu) => menu.classList.add("hidden"));
 
-      // --- 1. SECCIÓN: CAMPOS INDIVIDUALES ---
+      const menuGroups = [];
+      // (Mantenemos tu lógica de recopilación de datos de campos y tablas...)
       const individualInputs = Array.from(
         document.querySelectorAll("input.js-number-input")
       )
-        .filter((el) => {
-          const isSelf = el.id === input.id;
-          const inTable = el.closest(".table-element-container"); // No deben estar en tabla
-          const hasValue = el.value && !isNaN(parseFloat(el.value));
-          return !isSelf && !inTable && hasValue;
-        })
+        .filter(
+          (el) =>
+            el.id !== input.id &&
+            !el.closest(".table-element-container") &&
+            el.value &&
+            !isNaN(parseFloat(el.value.replace(",", ".")))
+        )
         .map((el) => {
           const parent = el.closest("[data-field-id]");
-          const labelEl = parent ? parent.querySelector("label") : null;
           return {
-            label: labelEl ? labelEl.innerText.trim() : "Campo sin nombre",
+            label: parent?.querySelector("label")?.innerText.trim() || "Campo",
             value: el.value,
           };
         });
 
-      if (individualInputs.length > 0) {
+      if (individualInputs.length > 0)
         menuGroups.push({
           title: "Campos Individuales",
           items: individualInputs,
           type: "individual",
         });
-      }
 
-      // --- 2. SECCIÓN: TABLAS ---
       const tableContainers = document.querySelectorAll(
         ".table-element-container"
       );
       tableContainers.forEach((container) => {
-        // Extraer nombre de la tabla
         const tableLabel =
           container.querySelector("span.text-\\[10px\\]")?.innerText.trim() ||
           "Tabla";
-
-        // Buscar encabezados numéricos/moneda
         const headers = Array.from(
           container.querySelectorAll(
             'th[data-type="number"], th[data-type="currency"]'
           )
         );
         const tableSums = [];
-
         headers.forEach((th) => {
           const colIndex = th.cellIndex;
-          const colLabel = th.innerText.trim();
           const cells = container.querySelectorAll(
             `tbody tr td:nth-child(${colIndex + 1})`
           );
-
           let total = 0;
           cells.forEach((td) => {
-            const val = parseFloat(td.getAttribute("data-col-value") || 0);
-            if (!isNaN(val)) total += val;
+            total += parseFloat(td.getAttribute("data-col-value") || 0);
           });
-
           tableSums.push({
-            label: `Suma: ${colLabel}`,
+            label: `Suma: ${th.innerText.trim()}`,
             value: total.toString(),
           });
         });
-
-        if (tableSums.length > 0) {
+        if (tableSums.length > 0)
           menuGroups.push({
             title: tableLabel,
             items: tableSums,
             type: "table",
           });
-        }
       });
 
-      // --- 3. RENDERIZADO DEL MENÚ ---
+      // 2. RENDERIZAR
       if (menuGroups.length === 0) {
         listMenu.innerHTML = `<li class="px-4 py-3 text-xs text-slate-400 text-center italic">No hay valores disponibles.</li>`;
       } else {
@@ -257,40 +236,59 @@ export class NumberElement extends BaseElement {
             <div class="bg-slate-50 px-3 py-1.5 border-y border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <i class="${
                   group.type === "table" ? "fas fa-table" : "fas fa-id-card"
-                } opacity-50"></i>
-                ${group.title}
+                } opacity-50"></i> ${group.title}
             </div>
             ${group.items
               .map(
                 (item) => `
               <li class="border-b border-slate-50 last:border-0">
-                <button type="button" data-val="${item.value}" 
-                        class="w-full text-left px-4 py-2 hover:bg-indigo-50/50 flex justify-between items-center group/item transition-colors">
-                  <span class="text-xs font-medium text-slate-600 group-hover/item:text-indigo-600 truncate mr-2 max-w-[160px]">
-                    ${item.label}
-                  </span>
-                  <span class="text-[11px] font-mono font-bold text-slate-400 group-hover/item:text-indigo-600 bg-slate-100 group-hover/item:bg-indigo-100 px-1.5 py-0.5 rounded">
-                    ${item.value}
-                  </span>
+                <button type="button" data-val="${item.value}" class="w-full text-left px-4 py-2 hover:bg-indigo-50/50 flex justify-between items-center group/item transition-colors">
+                  <span class="text-xs font-medium text-slate-600 group-hover/item:text-indigo-600 truncate mr-2 max-w-[160px]">${item.label}</span>
+                  <span class="text-[11px] font-mono font-bold text-slate-400 group-hover/item:text-indigo-600 bg-slate-100 group-hover/item:bg-indigo-100 px-1.5 py-0.5 rounded">${item.value}</span>
                 </button>
               </li>`
               )
               .join("")}
-          </div>
-        `
+          </div>`
           )
           .join("");
       }
 
+      // 3. POSICIONAMIENTO Y ANIMACIÓN
       listMenu.classList.remove("hidden");
-      listMenu.style.bottom = "10px";
-      listMenu.style.left = "10px";
+      listMenu.style.opacity = "0";
+      listMenu.style.transition = "all 0.2s ease-out";
+
+      const rect = input.getBoundingClientRect();
+      const menuWidth = listMenu.offsetWidth;
+      const menuHeight = listMenu.offsetHeight;
+      const margin = 8;
+
+      let topPos = rect.top - menuHeight - margin;
+      if (rect.top < menuHeight + margin) {
+        // Si no cabe arriba, poner abajo
+        topPos = rect.bottom + margin;
+        listMenu.style.transform = "translateY(-10px)";
+      } else {
+        listMenu.style.transform = "translateY(10px)";
+      }
+
+      listMenu.style.position = "fixed";
+      listMenu.style.top = `${topPos}px`;
+      listMenu.style.left = `${rect.right - menuWidth}px`;
+      listMenu.style.zIndex = "9999";
+
+      requestAnimationFrame(() => {
+        listMenu.style.opacity = "1";
+        listMenu.style.transform = "translateY(0)";
+      });
 
       listMenu.querySelectorAll("button").forEach((btn) => {
         btn.onclick = (e) => {
           e.stopPropagation();
-          const valToAdd = btn.dataset.val;
-          input.value = input.value ? `${input.value} + ${valToAdd}` : valToAdd;
+          input.value = input.value
+            ? `${input.value} + ${btn.dataset.val}`
+            : btn.dataset.val;
           input.focus();
           closeMenu();
         };
@@ -298,7 +296,22 @@ export class NumberElement extends BaseElement {
 
       document.addEventListener("click", outsideClickListener);
       document.addEventListener("keydown", escapeListener);
+      window.addEventListener("scroll", closeMenu, { once: true });
     };
+
+    input.addEventListener("focus", () => {
+      input.classList.replace("text-right", "text-left");
+    });
+    input.addEventListener("blur", () => {
+      input.classList.replace("text-left", "text-right");
+      processValue();
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.blur();
+      }
+    });
 
     if (listBtn)
       listBtn.onclick = (e) => {
