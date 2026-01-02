@@ -115,22 +115,34 @@ class AuthService {
         signOut,
       } = window.firebaseModules;
 
+      // 1. Crear usuario
       const cred = await createUserWithEmailAndPassword(
         this.auth,
         email,
         password
       );
 
-      // Init Lazy (Metadatos)
+      // 2. Init Lazy (Metadatos)
       await setDoc(doc(this.db, "users", cred.user.uid, "system", "metadata"), {
         vaultConfigured: false,
         createdAt: new Date().toISOString(),
       });
 
-      // [NUEVO] Enviar correo de verificación
-      await sendEmailVerification(cred.user);
+      // 3. Enviar correo (CON LOGGING)
+      console.log("📨 Intentando enviar correo de verificación...");
+      try {
+        await sendEmailVerification(cred.user);
+        console.log("✅ Correo enviado correctamente.");
+      } catch (emailError) {
+        console.error("❌ Error enviando email:", emailError);
+        // No lanzamos error aquí para no romper el registro,
+        // pero el usuario podrá pedir reenvío luego.
+      }
 
-      // [NUEVO] Cerramos sesión para que no entre directo al dashboard
+      // 4. Pequeña pausa para asegurar que la petición de red salga
+      await new Promise((r) => setTimeout(r, 1000));
+
+      // 5. Cerrar sesión
       await signOut(this.auth);
       this.updateState(null);
 
